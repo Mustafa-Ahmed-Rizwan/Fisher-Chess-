@@ -1,11 +1,7 @@
 # -*- coding: utf-8 -*-
 """
-Created on Fri Mar 12 11:20:56 2021
-
-@author: Zach Chartrand
-
-This file contains classes for the chess pieces.  Should be imported by
-the chess_engine module.
+Chess pieces implementation for Chess960 (Fischer Random Chess)
+All pieces maintain standard movement rules, only starting positions differ
 """
 
 from __future__ import annotations
@@ -17,22 +13,23 @@ if TYPE_CHECKING:
     from chess_board import Square
     from chess_engine import Move
 
-DIRECTIONS = dict(
-    DIAGONAL = (
+# Movement directions for all piece types
+DIRECTIONS = {
+    'DIAGONAL': (
         (1, -1),   # Up Left
         (-1, -1),  # Up Right
         (-1, 1),   # Down Left
         (1, 1),    # Down Right
     ),
-    HORIZONTAL = (
+    'HORIZONTAL': (
         (-1, 0),  # Left
         (1, 0),   # Right
     ),
-    VERTICAL = (
+    'VERTICAL': (
         (0, -1),  # Up
         (0, 1),   # Down
     ),
-    KNIGHT = (
+    'KNIGHT': (
         (-1, -2),  # Up 2, Left 1
         (1, -2),   # Up 2, Right 1
         (-1, 2),   # Down 2, Left 1 
@@ -42,342 +39,200 @@ DIRECTIONS = dict(
         (2, -1),   # Right 2, Up 1
         (2, 1),    # Right 2, Down 1
     ),
-)
-
+}
 
 class Piece:
     """
-    Super class for the different chess pieces.
+    Base class for all chess pieces in Chess960
+    Maintains standard movement rules - only starting positions differ
+    """
     
-    The only input needed to create a piece is the color of the
-    piece. The type of piece is determined by the subclass called
-    when creating the Piece object. This class should never be
-    used to create an object outside of its subclasses.
-    """    
     def __init__(self, color: str) -> None:
         """
-        Args:
-            color - 'white' or 'black'
+        Initialize piece with color ('white' or 'black')
         """
-        # Piece.name and Piece.symbol are set in subclasses. Methods
-        # using Piece.name and Piece.symbol should not raise errors as
-        # long as objects are created only through Piece's subclasses.
         if color.lower().startswith('w'):
             self.color = 'white'
         elif color.lower().startswith('b'):
             self.color = 'black'
         else:
-            raise ValueError("The Piece's color must be 'white' or 'black'.")
-        self.square = None   # Square will be set later, start with None.
-        self.first_move = None  # Store piece's first move. Used for castling
-            # and en passant.
-        self.pin_direction = ()  # Direction from which a piece is pinned.
-        self.image_name = self.color[0] + self.symbol  # Image filename for the
-            # piece.
+            raise ValueError("Piece color must be 'white' or 'black'")
         
+        self.square = None        # Current square the piece occupies
+        self.first_move = None    # Track first move for castling/en passant
+        self.pin_direction = ()   # Direction from which piece is pinned
+        self.image_name = self.color[0] + self.symbol  # For GUI rendering
+
     def __eq__(self, other) -> bool:
-        """Return self == other."""
-        pieceType = type(self)
-        if isinstance(other, pieceType):
-            if id(self) == id(other):
-                return True
-        
-        return False
+        """Pieces are equal if they are the same object"""
+        return id(self) == id(other)
     
     def __hash__(self) -> int:
-        """Return hash(self)."""
         return hash((self.name, self.color, id(self)))
     
     def __repr__(self) -> str:
-        """Return repr(self)."""
-        return (f'self.__class__.__name__('
-                f"'{self.color}')")
+        return f"{self.__class__.__name__}('{self.color}')"
     
     def __str__(self) -> str:
-        """Return str(self)."""
         return self.get_fullname()
-    
+
     def get_color(self) -> str:
-        """
-        Returns a string of the piece's color,
-        either 'white' or 'black'.
-        """
+        """Returns piece color ('white' or 'black')"""
         return self.color
     
     def get_square(self) -> Square:
-        """Returns the square object that the piece occupies."""
+        """Returns current square object"""
         return self.square
     
     def get_coords(self) -> Tuple[int]:
-        """
-        Returns the coordinates of the piece if the piece is on the
-        board.
-        
-        The value returned is a tuple of the form
-        
-            file, rank
-        
-        where both file and rank are indices from 0 to the board
-        width/height - 1.
-        """
+        """Returns (file, rank) coordinates if on board"""
         if self.is_on_board():
             return self.square.get_coords()
-        
         return ()
     
     def get_square_name(self) -> str:
-        """
-        Returns the name of the square that the piece is on.
-        
-        If the piece is on a square, this will return the square's name
-        in algebraic notation.  Otherwise, it will state that the piece
-        is not on a square.
-        """
-        if self.square is not None:
+        """Returns algebraic notation of current square"""
+        if self.is_on_board():
             return self.square.get_name()
-        
         return ''
     
     def get_square_color(self) -> str:
-        """
-        Returns the color of the square that the piece is on.
-        
-        Useful for Bishops (light-square vs. dark-square bishop).
-        """
+        """Returns color of current square ('light' or 'dark')"""
         return self.square.get_color()
     
     def set_square(self, square: Square) -> None:
-        """
-        Assigns a Square object to the Piece and then assigns the Piece
-        to that same Square object.
-        """
+        """Places piece on a square"""
         self.square = square
         square.piece = self
     
     def is_on_board(self) -> bool:
-        """
-        Returns whether the piece is on the board or not.
-        
-        Returns True if the piece is on a square, otherwise returns
-        False.
-        """
-        if self.square is not None:
-            return True
-        
-        return False
+        """Returns True if piece is placed on board"""
+        return self.square is not None
         
     def get_name(self) -> str:
-        """
-        Returns the name of the piece.
-        
-        Returns a string of the piece's name, e.g. for a Queen, this
-        function returns 'Queen'.
-        """
+        """Returns piece name (e.g., 'Queen')"""
         return self.name
     
     def get_symbol(self) -> str:
-        """
-        Returns the one-letter symbol for the piece in algebraic
-        notation, e.g., the Knight is denoted by an 'N'.
-        """
+        """Returns algebraic notation symbol (e.g., 'Q' for Queen)"""
         return self.symbol
     
     def get_fullname(self) -> str:
-        """
-        Returns a human-readable string of the piece, its color, and
-        the square it's on if assigned to a square.
-        """
-        fullname = []
+        """Returns descriptive string (e.g., 'White Queen on d1')"""
+        parts = []
         if not self.is_on_board():
-            fullname.append('Off-the-board')
-        fullname.append(self.get_color().title())
-        fullname.append(self.get_name().title())
+            parts.append('Off-the-board')
+        parts.append(self.color.title())
+        parts.append(self.name.title())
         if self.is_on_board():
-            fullname.append('on')
-            fullname.append(self.get_square_name())
-        
-        return ' '.join(fullname)
+            parts.extend(['on', self.get_square_name()])
+        return ' '.join(parts)
     
     def get_image_name(self) -> str:
-        """
-        Returns piece's image filename as a string.
-        
-        Used for importing images and rendering pieces in the game.
-        """
+        """Returns image filename prefix (e.g., 'wQ' for white Queen)"""
         return self.image_name
     
     def remove(self) -> None:
-        """
-        Removes the piece from a square on the board if the
-        piece is on the board.
-        """
+        """Removes piece from board"""
         if self.is_on_board():
-            self.square.remove_piece(self)
+            self.square.remove_piece()
     
     def has_moved(self) -> bool:
-        """
-        Returns True if the piece hasn't moved on the board.
-        Used for castling and two-square pawn moves.
-        """
-        if self.first_move is not None:
-            return True
-        
-        return False
+        """Returns True if piece has moved from starting position"""
+        return self.first_move is not None
     
     def get_first_move(self) -> Move:
-        """Returns the first move of the piece if it has one."""
-        if self.has_moved():
-            return self.first_move
-        
-        return None
+        """Returns first move if piece has moved"""
+        return self.first_move if self.has_moved() else None
     
     def is_pinned(self) -> bool:
-        """Returns True if the piece is pinned to the King."""
-        if len(self.pin_direction) > 0:
-            return True
-        
-        return False
+        """Returns True if piece is pinned to king"""
+        return len(self.pin_direction) > 0
     
     def get_pin_direction(self) -> Tuple[int]:
-        """Returns the direction a pin is coming from."""
+        """Returns direction of pin if pinned"""
         return self.pin_direction
     
     def get_directions(self) -> Tuple[Tuple[int]]:
-        """
-        Returns the directions that the piece can move in.
-        
-        Each direction is a tuple with a 0 or 1 in the x and y
-        direction. For example, right and down is represented as
-        (1, 1). This method returns a tuple of direction tuples. Used
-        for determining squares that the piece can move in.
-        """
+        """Returns tuple of movement direction vectors"""
         return self.directions
 
-
 class Rook(Piece):
-    """
-    Class for the Rook piece.
+    """Rook piece - moves horizontally/vertically any distance"""
     
-    The Rook is the castle piece. Moves in rows with no limit to how
-    far it can move on the board.
-    """
     def __init__(self, color: str) -> None:
         self.name = 'Rook'
         self.symbol = 'R'
-        
         super().__init__(color)
-        
         self.directions = DIRECTIONS['HORIZONTAL'] + DIRECTIONS['VERTICAL']
-    
 
 class King(Piece):
-    """
-    Class for the King piece.
+    """King piece - moves one square in any direction"""
     
-    Most valuable piece in the game.  If the King is captured, the game
-    is over.  Moves one (1) square in any direction.
-    """
     def __init__(self, color: str) -> None:
         self.name = 'King'
         self.symbol = 'K'
-        
         super().__init__(color)
-        
         self.directions = (
             DIRECTIONS['HORIZONTAL'] 
             + DIRECTIONS['VERTICAL'] 
             + DIRECTIONS['DIAGONAL']
         )
-    
 
 class Queen(Piece):
-    """
-    Class for the Queen piece.
+    """Queen piece - moves any distance in any direction"""
     
-    The Queen is arguably the best piece in the game.  It can move both
-    as a rook and a bishop, i.e. any number of squares vertically,
-    horizontally, or diagonally.
-    """
     def __init__(self, color: str) -> None:
         self.name = 'Queen'
         self.symbol = 'Q'
-        
         super().__init__(color)
-        
         self.directions = (
             DIRECTIONS['HORIZONTAL'] 
             + DIRECTIONS['VERTICAL'] 
             + DIRECTIONS['DIAGONAL']
         )
-    
 
 class Knight(Piece):
-    """
-    Class for the Knight piece.
+    """Knight piece - moves in L-shape (2 squares one way, 1 square perpendicular)"""
     
-    A minor piece that moves in an L-pattern. Can jump over pieces.
-    Always moves to an opposite-color square.
-    
-    Also known as a Horse by plebs.
-    """
     def __init__(self, color: str) -> None:
         self.name = 'Knight'
         self.symbol = 'N'
-        
         super().__init__(color)
-        
         self.directions = DIRECTIONS['KNIGHT']
-    
 
 class Bishop(Piece):
-    """
-    Class for the Bishop piece.
+    """Bishop piece - moves diagonally any distance"""
     
-    A minor piece that moves diagonally any number of squares. Can only
-    move on squares of the same color.
-    """
     def __init__(self, color: str) -> None:
         self.name = 'Bishop'
         self.symbol = 'B'
-        
         super().__init__(color)
-        
         self.directions = DIRECTIONS['DIAGONAL']
 
-
 class Pawn(Piece):
-    """
-    Class for the Pawn piece.
+    """Pawn piece - moves forward, captures diagonally"""
     
-    The front line of your army.  Can move one (1) square forward, two
-    (2) squares forward as its first move, and attacks diagonally
-    forward.
-    """
     def __init__(self, color: str) -> None:
         self.name = 'Pawn'
         self.symbol = 'P'
-        
         super().__init__(color)
         
+        # Pawns move differently based on color
         if self.color == 'white':
-            self.directions = DIRECTIONS['VERTICAL'][0]
-            self.promotion_rank = 0
-        elif self.color == 'black':
-            self.directions = DIRECTIONS['VERTICAL'][1]
-            self.promotion_rank = 7
-        
+            self.directions = DIRECTIONS['VERTICAL'][0]  # (0, -1)
+            self.promotion_rank = 0  # Rank 1 (0 in zero-based)
+        else:
+            self.directions = DIRECTIONS['VERTICAL'][1]  # (0, 1)
+            self.promotion_rank = 7  # Rank 8 (7 in zero-based)
+    
     def get_promotion_rank(self) -> int:
-        """Returns the rank that the Pawn will promote at."""
+        """Returns rank index where pawn promotes"""
         return self.promotion_rank
     
     def can_promote(self) -> bool:
-        """Returns whether a pawn can promote."""
-        rank = self.get_coords()[1]
-        if rank + self.directions[1] == self.get_promotion_rank():
-            return True
-        
-        return False
-
-
-
-
+        """Returns True if pawn is on promotion square"""
+        if not self.is_on_board():
+            return False
+        current_rank = self.get_coords()[1]
+        return (current_rank + self.directions[1] == self.promotion_rank)

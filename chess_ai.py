@@ -1,227 +1,134 @@
 # -*- coding: utf-8 -*-
 """
-Created on Wed Mar 24 11:26:24 2021
-
-@author: Zach
+Chess960 AI Implementation using Negamax with Alpha-Beta Pruning
 """
 
-import random as rn
+import random
 from copy import copy
 
+# Piece values for Chess960 (same as standard chess)
+PIECE_VALUES = {
+    'King': 20000,  # High value to prioritize checkmate
+    'Queen': 9,
+    'Rook': 5,
+    'Bishop': 3.25,  # Slightly higher than knight in Chess960
+    'Knight': 3,
+    'Pawn': 1
+}
 
-__all__ = ['getRandomMove', 'getBestMove']
-
-PIECE_SCORE = dict(
-    King = 9000,
-    Queen = 9,
-    Rook = 5,
-    Bishop = 3,
-    Knight = 3,
-    Pawn = 1,
-)
-CHECKMATE = PIECE_SCORE['King'] + 1
+CHECKMATE = PIECE_VALUES['King'] + 1
 STALEMATE = 0
-MAX_DEPTH = 3
+MAX_DEPTH = 3  # Increase for stronger AI (slower)
 
+# Global variable for tracking best move
+nextMove = None
 
 def getRandomMove(validMoves):
-    """Picks and returns a random move."""
-    return validMoves[rn.randint(0, len(validMoves)-1)]
-
-
-def getBestMinMaxMove(gs, validMoves):
-    """Find the best move based on material alone."""
-    turnMultiplier = 1 if gs.white_to_move else -1
-    opponentMinMaxScore = CHECKMATE
-    bestPlayerMove = None
-    rn.shuffle(validMoves)
-    for playerMove in validMoves:
-        gs.make_move(playerMove)
-        opponentsMoves = gs.get_valid_moves()
-        if gs.stalemate:
-            opponentMaxScore = STALEMATE
-        elif gs.checkmate:
-            opponentMaxScore = -CHECKMATE
-        else:
-            opponentMaxScore = -CHECKMATE
-            for opponentsMove in opponentsMoves:
-                gs.make_move(opponentsMove)
-                gs.get_valid_moves()
-                if gs.checkmate:
-                    score = CHECKMATE
-                elif gs.stalemate:
-                    score = STALEMATE
-                else:
-                    score = -turnMultiplier * scoreMaterial(gs.board)
-                if score > opponentMaxScore:
-                    opponentMaxScore = score
-                gs.undo_move()
-                gs.undo_log.pop()
-        
-        if opponentMaxScore < opponentMinMaxScore:
-            opponentMinMaxScore = opponentMaxScore
-            bestPlayerMove = playerMove
-        gs.undo_move()
-        gs.undo_log.pop()
-    
-    return bestPlayerMove
-
+    """Returns a random valid move."""
+    return random.choice(validMoves) if validMoves else None
 
 def getBestMove(gs):
-    """Helper function to make the first recursive call."""
+    """
+    Finds the best move using Negamax with Alpha-Beta pruning.
+    Args:
+        gs: GameState object
+    Returns:
+        Move: Best move found
+    """
     global nextMove
-    gs = copy(gs)
-    validMoves = gs.valid_moves
+    gs_copy = copy(gs)
+    validMoves = gs_copy.valid_moves
+    
+    # Randomize move order to make AI less predictable
+    random.shuffle(validMoves)
+    
     nextMove = None
-    rn.shuffle(validMoves)
-    getNegaMaxAlphaBetaMove(gs, validMoves, MAX_DEPTH, -CHECKMATE,
-                            CHECKMATE, 1 if gs.white_to_move else -1)
-    return nextMove
-
-
-def getMinMaxMove(gs, validMoves, whiteToMove, depth):
-    """Recursive function for finding the best AI move."""
-    global nextMove
-    if depth == 0:
-        return scoreMaterial(gs.board)
+    negamaxAlphaBeta(gs_copy, validMoves, MAX_DEPTH, -CHECKMATE, CHECKMATE, 
+                    1 if gs_copy.white_to_move else -1)
     
-    if whiteToMove:
-        maxScore = -CHECKMATE
-        for move in validMoves:
-            gs.make_move(move)
-            nextMoves = gs.get_valid_moves()
-            score = getMinMaxMove(gs, nextMoves, False, depth-1)
-            if score > maxScore:
-                maxScore = score
-                if depth == MAX_DEPTH:
-                    nextMove = move
-            gs.undo_move()
-            gs.undo_log.pop()
-        
-        return maxScore
-    
-    else:
-        minScore = CHECKMATE
-        for move in validMoves:
-            gs.make_move(move)
-            nextMoves = gs.get_valid_moves()
-            score = getMinMaxMove(gs, nextMoves, True, depth-1)
-            if score < minScore:
-                minScore = score
-                if depth == MAX_DEPTH:
-                    nextMove = move
-            gs.undo_move()
-            gs.undo_log.pop()
-        
-        return minScore
+    return nextMove if nextMove else getRandomMove(validMoves)
 
-
-def getNegaMaxMove(gs, validMoves, depth, turnMultiplier):
+def negamaxAlphaBeta(gs, validMoves, depth, alpha, beta, turnMultiplier):
     """
-    
+    Negamax algorithm with Alpha-Beta pruning.
     """
     global nextMove
-    if depth == 0:
-        return turnMultiplier * scoreBoard(gs)
+    
+    # Base case - return board evaluation at leaf nodes
+    if depth == 0 or gs.gameover:
+        return turnMultiplier * evaluateBoard(gs)
     
     maxScore = -CHECKMATE
     for move in validMoves:
+        # Make the move
         gs.make_move(move)
         nextMoves = gs.get_valid_moves()
-        score = -1 * getNegaMaxMove(gs, nextMoves, depth-1, -turnMultiplier)
+        
+        # Recursive call
+        score = -negamaxAlphaBeta(gs, nextMoves, depth-1, -beta, -alpha, -turnMultiplier)
+        
+        # Undo the move
+        gs.undo_move()
+        
+        # Update best move if at root level
         if score > maxScore:
             maxScore = score
             if depth == MAX_DEPTH:
                 nextMove = move
-        if abs(score) == CHECKMATE:
-            break
         
-        gs.undo_move()
-        gs.undo_log.pop()
+        # Alpha-Beta pruning
+        alpha = max(alpha, maxScore)
+        if alpha >= beta:
+            break
     
     return maxScore
 
-
-def getNegaMaxAlphaBetaMove(
-        gs, validMoves, depth, alpha, beta, turnMultiplier):
-    global nextMove
-    if depth == 0:
-        return turnMultiplier * scoreBoard(gs)
-    
-    # Move ordering - look at moves that put opponent in check and captures
-    # first.  Add later.
-    maxScore = -CHECKMATE
-    if validMoves:
-        # p = Pool(len(validMoves))
-        for move in validMoves:
-            gs.make_move(move)
-            nextMoves = gs.get_valid_moves()
-            score = -1 * getNegaMaxAlphaBetaMove(gs, nextMoves, depth-1, -beta,
-                                                 -alpha, -turnMultiplier)
-            if score > maxScore:
-                maxScore = score
-                if depth == MAX_DEPTH:
-                    nextMove = move
-            
-            gs.undo_move()
-            gs.undo_log.pop()
-            if maxScore > alpha:  # Pruning happens.
-                alpha = maxScore
-            if alpha >= beta:
-                break
-    
-    return maxScore
-
-
-def scoreBoard(gs):
+def evaluateBoard(gs):
     """
-    Scores the board based on material and attacks.
-    
-    A positive score is good for white, and a negative score is good for black.
+    Evaluates the board position for the AI.
+    Positive score is good for white, negative for black.
     """
     if gs.checkmate:
-        if gs.white_to_move:
-            return -CHECKMATE
-        else:
-            return CHECKMATE
+        return -CHECKMATE if gs.white_to_move else CHECKMATE
     elif gs.stalemate:
         return STALEMATE
     
-    board = gs.board
     score = 0
+    board = gs.board
+    
+    # Material evaluation
     for piece in board.get_pieces():
         if piece.is_on_board():
+            pieceValue = PIECE_VALUES[piece.get_name()]
+            
+            # Add bonuses for specific Chess960 considerations
+            if piece.get_name() == 'Bishop':
+                # Bonus for bishop pair
+                if len(board.piece_lists['Bishop'][piece.get_color()]) >= 2:
+                    pieceValue += 0.5
+            elif piece.get_name() == 'Rook':
+                # Small penalty for undeveloped rooks in Chess960
+                if not piece.has_moved() and gs.move_number > 10:
+                    pieceValue -= 0.3
+            
+            # Add value based on color
             if piece.get_color() == 'white':
-                score += PIECE_SCORE[piece.get_name()]
-                if piece.get_name() == 'Pawn' and piece.can_promote():
-                    score += 8
-            elif piece.get_color() == 'black':
-                score -= PIECE_SCORE[piece.get_name()]
-                if piece.get_name() == 'Pawn' and piece.can_promote():
-                    score -= 8
+                score += pieceValue
+            else:
+                score -= pieceValue
     
     return score
-
 
 def scoreMaterial(board):
     """
-    Score the board based on material.
+    Quick material evaluation without positional considerations.
     """
     score = 0
     for piece in board.get_pieces():
         if piece.is_on_board():
+            pieceValue = PIECE_VALUES[piece.get_name()]
             if piece.get_color() == 'white':
-                score += PIECE_SCORE[piece.get_name()]
-            elif piece.get_color() == 'black':
-                score -= PIECE_SCORE[piece.get_name()]
-    
+                score += pieceValue
+            else:
+                score -= pieceValue
     return score
-
-
-
-
-
-
-
-
-
