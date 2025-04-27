@@ -59,7 +59,7 @@ def main():
     highlight_last_move = True  # Highlight last move
     
     # Set board orientation based on player color
-    if humanBlack and not humanWhite:
+    if humanBlack:
         UPSIDEDOWN = True
     
     # Main game loop
