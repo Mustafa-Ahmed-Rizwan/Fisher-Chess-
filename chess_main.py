@@ -16,7 +16,9 @@ from chess_menu import mainMenu
 
 # Constants
 CAPTION = 'Chess960 (Fischer Random Chess)'
-WIDTH = HEIGHT = 720                    # Board size in pixels
+BOARD_WIDTH = HEIGHT = 720              # Board size in pixels
+SIDEBAR_WIDTH = 200                     # Width of the sidebar for instructions
+WIDTH = BOARD_WIDTH + SIDEBAR_WIDTH     # Total window width
 DIMENSION = 8                           # 8x8 chess board
 SQ_SIZE = HEIGHT // DIMENSION
 MAX_FPS = 120                           # For animations
@@ -77,6 +79,10 @@ def main():
                     file = location[0] // SQ_SIZE
                     rank = location[1] // SQ_SIZE
                     
+                    # Ensure clicks are within the board area
+                    if location[0] >= BOARD_WIDTH:  # Ignore clicks in the sidebar
+                        continue
+                    
                     if UPSIDEDOWN:
                         file, rank = FLIPPEDBOARD[file], FLIPPEDBOARD[rank]
                     
@@ -127,18 +133,15 @@ def main():
             # Key handler
             elif e.type == p.KEYDOWN:
                 # Undo move
-                if ((e.mod & p.KMOD_CTRL and e.key == p.K_z) or 
-                    e.key == p.K_LEFT or e.key == p.K_a):
+                if e.mod & p.KMOD_CTRL and e.key == p.K_z:
                     if gs.move_log:
                         gs.board.update_pieces(gs.undo_move())
                         move = gs.undo_log.copy().pop()[0]
                         animateMove(move, validMoves, undo=True)
                         print(f'Undid {move}', end=' ')
                         moveMade = True
-                
                 # Redo move
-                elif ((e.mod & p.KMOD_CTRL and e.key == p.K_y) or 
-                      e.key == p.K_RIGHT or e.key == p.K_d):
+                elif e.mod & p.KMOD_CTRL and e.key == p.K_y:
                     if gs.undo_log:
                         gs.redo_move()
                         move = gs.move_log.copy().pop()[0]
@@ -171,10 +174,13 @@ def main():
         # Check game status
         gs.find_mate(validMoves)
         drawGameState(validMoves)
+        
+        # Draw the sidebar and instructions
+        drawSidebar()
 
         # Display game over message
         if gs.gameover:
-            s = p.Surface((WIDTH, HEIGHT))
+            s = p.Surface((BOARD_WIDTH, HEIGHT))
             s.fill((0, 0, 0))
             s.set_alpha(150)
             screen.blit(s, (0, 0))
@@ -190,7 +196,6 @@ def main():
 
         clock.tick(MAX_FPS)
         p.display.flip()
-
 
 def loadImages():
     """Initialize dictionary of piece images."""
@@ -214,7 +219,6 @@ def loadImages():
                 # Create blank surface if image missing
                 IMAGES[pieceName] = p.Surface((SQ_SIZE, SQ_SIZE))
                 IMAGES[pieceName].fill((200, 200, 200))
-
 
 def drawGameState(validMoves):
     """Draw complete game state including board, pieces, highlights."""
@@ -374,6 +378,9 @@ def animateMove(move, validMoves, undo=False):
         drawAnimationFrame(pieceMoved, pieceCaptured, startFile, startRank,
             dFile, dRank, endFile, endRank, frame, framesPerMove)
         
+        # Draw sidebar during animation
+        drawSidebar()
+        
         p.display.flip()
         clock.tick(MAX_FPS)
 
@@ -439,9 +446,41 @@ def drawText(text, font_size, font='Helvetica', xoffset=0, yoffset=0):
     font = p.font.SysFont(font, font_size, True, False)
     textObject = font.render(text, True, (245, 245, 245))
     textRect = textObject.get_rect()
-    textRect.centerx = screen.get_rect().centerx + xoffset
-    textRect.centery = screen.get_rect().centery - HEIGHT//15 + yoffset
+    textRect.centerx = BOARD_WIDTH // 2 + xoffset
+    textRect.centery = HEIGHT // 2 - HEIGHT // 15 + yoffset
     screen.blit(textObject, textRect)
+
+def drawSidebar():
+    """Draw a sidebar with undo/redo instructions."""
+    # Draw sidebar background
+    sidebar_rect = p.Rect(BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT)
+    p.draw.rect(screen, (50, 50, 50), sidebar_rect)  # Dark gray background
+    
+    # Title
+    font = p.font.SysFont('Helvetica', 24, True, False)
+    title_text = "Instructions"
+    title_object = font.render(title_text, True, (245, 245, 245))
+    title_rect = title_object.get_rect()
+    title_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
+    title_rect.top = 20
+    screen.blit(title_object, title_rect)
+    
+    # Undo instruction
+    font = p.font.SysFont('Helvetica', 20, True, False)
+    undo_text = "Undo: Ctrl+Z"
+    undo_object = font.render(undo_text, True, (245, 245, 245))
+    undo_rect = undo_object.get_rect()
+    undo_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
+    undo_rect.top = 60
+    screen.blit(undo_object, undo_rect)
+    
+    # Redo instruction
+    redo_text = "Redo: Ctrl+Y"
+    redo_object = font.render(redo_text, True, (245, 245, 245))
+    redo_rect = redo_object.get_rect()
+    redo_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
+    redo_rect.top = 90
+    screen.blit(redo_object, redo_rect)
 
 def exitGame():
     """Clean up and exit."""
