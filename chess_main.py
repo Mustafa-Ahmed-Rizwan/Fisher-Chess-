@@ -585,46 +585,64 @@ def drawTurnIndicator():
 
 def drawSidebar():
     """Draw a sidebar with turn indicator, undo/redo buttons, and quit button with adjusted spacing."""
-    # Draw sidebar background
+    # Draw sidebar background with a cool metallic gradient
     sidebar_rect = p.Rect(BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT)
-    p.draw.rect(screen, (40, 40, 40), sidebar_rect)  # Darker gray background
+    # Create a surface for the gradient
+    sidebar_surface = p.Surface((SIDEBAR_WIDTH, HEIGHT))
+    for y in range(HEIGHT):
+        r = 50 + (y / HEIGHT) * 20  # Subtle red gradient
+        g = 50 + (y / HEIGHT) * 20  # Subtle green gradient
+        b = 60 + (y / HEIGHT) * 30  # Subtle blue gradient
+        p.draw.line(sidebar_surface, (r, g, b), (0, y), (SIDEBAR_WIDTH, y))
+    screen.blit(sidebar_surface, (BOARD_WIDTH, 0))
+
+    # Draw shadow effect
+    shadow_surface = p.Surface((SIDEBAR_WIDTH + 10, HEIGHT + 10), p.SRCALPHA)
+    p.draw.rect(shadow_surface, (0, 0, 0, 100), (5, 5, SIDEBAR_WIDTH, HEIGHT))  # Semi-transparent shadow
+    screen.blit(shadow_surface, (BOARD_WIDTH - 5, -5))
+
+    # Draw stylish border
+    border_color_inner = (80, 80, 80)  # Dark gray inner border
+    border_color_outer = (120, 120, 120)  # Light gray outer border
+    p.draw.rect(screen, border_color_inner, (BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT), 2)  # Inner border
+    p.draw.rect(screen, border_color_outer, (BOARD_WIDTH - 2, -2, SIDEBAR_WIDTH + 4, HEIGHT + 4), 4)  # Outer border
 
     # Draw turn indicator at the top
     drawTurnIndicator()
 
     # Undo button (adjusted spacing below turn indicator)
     undo_button_rect = p.Rect(BOARD_WIDTH + 20, 80, 80, 60)
-    p.draw.rect(screen, (60, 60, 60), undo_button_rect)  # Button background
-    p.draw.rect(screen, (100, 100, 100), undo_button_rect, 2)  # Border
+    p.draw.rect(screen, (40, 40, 40), undo_button_rect)  # Darker button background for contrast
+    p.draw.rect(screen, (150, 150, 150), undo_button_rect, 2)  # Lighter border
     # Draw left arrow
     arrow_points = [
         (BOARD_WIDTH + 40, 110),
         (BOARD_WIDTH + 60, 90),
         (BOARD_WIDTH + 60, 130)
     ]
-    p.draw.polygon(screen, (245, 245, 245), arrow_points)
+    p.draw.polygon(screen, (200, 200, 200), arrow_points)
 
     # Redo button (aligned with undo button)
     redo_button_rect = p.Rect(BOARD_WIDTH + 100, 80, 80, 60)
-    p.draw.rect(screen, (60, 60, 60), redo_button_rect)  # Button background
-    p.draw.rect(screen, (100, 100, 100), redo_button_rect, 2)  # Border
+    p.draw.rect(screen, (40, 40, 40), redo_button_rect)
+    p.draw.rect(screen, (150, 150, 150), redo_button_rect, 2)
     # Draw right arrow
     arrow_points = [
         (BOARD_WIDTH + 140, 110),
         (BOARD_WIDTH + 120, 90),
         (BOARD_WIDTH + 120, 130)
     ]
-    p.draw.polygon(screen, (245, 245, 245), arrow_points)
+    p.draw.polygon(screen, (200, 200, 200), arrow_points)
 
     # Quit button (adjusted spacing from the bottom)
-    quit_button_rect = p.Rect(BOARD_WIDTH + 20, 650, 160, 30)
-    p.draw.rect(screen, (200, 50, 50), quit_button_rect)  # Red button background
+    quit_button_rect = p.Rect(BOARD_WIDTH + 20, 668, 160, 30)
+    p.draw.rect(screen, (150, 40, 40), quit_button_rect)  # Deeper red for a cool effect
     font = p.font.SysFont('Helvetica', 18, True, False)
     quit_text = "Quit to Menu"
     quit_object = font.render(quit_text, True, (245, 245, 245))
     quit_rect = quit_object.get_rect()
     quit_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
-    quit_rect.centery = 665
+    quit_rect.centery = 683
     screen.blit(quit_object, quit_rect)
 
 def exitGame():
