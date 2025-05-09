@@ -227,7 +227,7 @@ class GameState():
             path_clear = True
             for i in range(1, steps):
                 check_file = king_file + (i * direction)
-                if s[check_file, rank].has_piece():
+                if not (0 <= check_file < self.file_size) or s[check_file, rank].has_piece():
                     path_clear = False
                     break
                     
@@ -238,22 +238,26 @@ class GameState():
             safe = True
             for i in range(1, min(3, steps) + 1):
                 check_file = king_file + (i * direction)
-                if self.get_pins_and_checks(king, s[check_file, rank])[1]:
+                if not (0 <= check_file < self.file_size) or self.get_pins_and_checks(king, s[check_file, rank])[1]:
                     safe = False
                     break
                     
             if safe:
                 castle_file = king_file + (2 * direction)
-                castle_square = s[castle_file, rank]
-                rook_end_file = king_file + (1 * direction)
-                rook_end_square = s[rook_end_file, rank]
-                
-                moves.append(Move(
-                    king_square,
-                    castle_square,
-                    self.move_number,
-                    castle=(rook, rook_square, rook_end_square)
-                ))
+                # Ensure castle_file is within bounds
+                if 0 <= castle_file < self.file_size:
+                    castle_square = s[castle_file, rank]
+                    rook_end_file = king_file + (1 * direction)
+                    # Ensure rook_end_file is within bounds
+                    if 0 <= rook_end_file < self.file_size:
+                        rook_end_square = s[rook_end_file, rank]
+                        
+                        moves.append(Move(
+                            king_square,
+                            castle_square,
+                            self.move_number,
+                            castle=(rook, rook_square, rook_end_square)
+                        ))
 
     def get_all_moves(self):
         moves = []

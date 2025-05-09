@@ -32,7 +32,7 @@ def main():
     Main driver for Chess960 game.
     Handles user input and updates graphics.
     """
-    global screen, clock, theme, gs, highlight_last_move, UPSIDEDOWN, selectedSquare
+    global screen, clock, theme, gs, highlight_last_move, UPSIDEDOWN, selectedSquare, humanWhite, humanBlack
     
     # Initialize game settings
     humanWhite, humanBlack, theme_name = mainMenu()
@@ -74,13 +74,43 @@ def main():
             
             # Mouse handler
             elif e.type == p.MOUSEBUTTONDOWN:
+                location = p.mouse.get_pos()  # (x,y) location
+                # Check if click is in sidebar for undo/redo buttons or quit button
+                if location[0] >= BOARD_WIDTH:
+                    sidebar_x = location[0] - BOARD_WIDTH
+                    sidebar_y = location[1]
+                    # Undo button area: 20-100, 80-140 (adjusted for new spacing)
+                    if (sidebar_x >= 20 and sidebar_x <= 100 and
+                        sidebar_y >= 80 and sidebar_y <= 140):
+                        if gs.move_log:
+                            gs.board.update_pieces(gs.undo_move())
+                            move = gs.undo_log.copy().pop()[0]
+                            animateMove(move, validMoves, undo=True)
+                            print(f'Undid {move}', end=' ')
+                            moveMade = True
+                    # Redo button area: 100-180, 80-140 (adjusted for new spacing)
+                    elif (sidebar_x >= 100 and sidebar_x <= 180 and
+                          sidebar_y >= 80 and sidebar_y <= 140):
+                        if gs.undo_log:
+                            gs.redo_move()
+                            move = gs.move_log.copy().pop()[0]
+                            animateMove(move, validMoves)
+                            print(f'Redid {move}', end=' ')
+                            moveMade = True
+                    # Quit button area: 20-180, 650-680 (adjusted for new spacing)
+                    elif (sidebar_x >= 20 and sidebar_x <= 180 and
+                          sidebar_y >= 650 and sidebar_y <= 680):
+                        # Reset game state and return to main menu
+                        p.quit()
+                        main()
+                        return
+                
                 if not gs.gameover and humanTurn:
-                    location = p.mouse.get_pos()  # (x,y) location
                     file = location[0] // SQ_SIZE
                     rank = location[1] // SQ_SIZE
                     
                     # Ensure clicks are within the board area
-                    if location[0] >= BOARD_WIDTH:  # Ignore clicks in the sidebar
+                    if location[0] >= BOARD_WIDTH:  # Ignore other sidebar clicks
                         continue
                     
                     if UPSIDEDOWN:
@@ -130,18 +160,18 @@ def main():
                                     squareClicked = ()
                                     playerClicks = []
 
-            # Key handler
+            # Key handler for undo/redo with arrow keys
             elif e.type == p.KEYDOWN:
-                # Undo move
-                if e.mod & p.KMOD_CTRL and e.key == p.K_z:
+                # Undo with left arrow key
+                if e.key == p.K_LEFT:
                     if gs.move_log:
                         gs.board.update_pieces(gs.undo_move())
                         move = gs.undo_log.copy().pop()[0]
                         animateMove(move, validMoves, undo=True)
                         print(f'Undid {move}', end=' ')
                         moveMade = True
-                # Redo move
-                elif e.mod & p.KMOD_CTRL and e.key == p.K_y:
+                # Redo with right arrow key
+                elif e.key == p.K_RIGHT:
                     if gs.undo_log:
                         gs.redo_move()
                         move = gs.move_log.copy().pop()[0]
@@ -309,6 +339,17 @@ def drawPieces():
                     SQ_SIZE, SQ_SIZE
                 )
             )
+            # Draw red border around king if in check
+            if gs.in_check and (piece.get_name() == 'King' and piece.get_color() == ('white' if gs.white_to_move else 'black')):
+                border_width = 2
+                border_color = p.Color('red')
+                border_rect = p.Rect(
+                    file * SQ_SIZE - border_width,
+                    rank * SQ_SIZE - border_width,
+                    SQ_SIZE + 2 * border_width,
+                    SQ_SIZE + 2 * border_width
+                )
+                p.draw.rect(screen, border_color, border_rect, border_width)
 
 def markMovementSquares(square, validMoves):
     """Find squares this piece can move to/capture on."""
@@ -443,44 +484,82 @@ def printMove(move):
 
 def drawText(text, font_size, font='Helvetica', xoffset=0, yoffset=0):
     """Draw centered text with outline."""
-    font = p.font.SysFont(font, font_size, True, False)
+    font = p.font.SysFont(font, size=font_size, bold=True, italic=False)
     textObject = font.render(text, True, (245, 245, 245))
     textRect = textObject.get_rect()
     textRect.centerx = BOARD_WIDTH // 2 + xoffset
     textRect.centery = HEIGHT // 2 - HEIGHT // 15 + yoffset
     screen.blit(textObject, textRect)
 
+def drawTurnIndicator():
+    """Draws a turn indicator at the top of the sidebar showing whose turn it is."""
+    # Position and size of the turn indicator
+    indicator_x = BOARD_WIDTH + SIDEBAR_WIDTH // 2
+    indicator_y = 25  # Slightly higher for better alignment
+    radius = 15  # Smaller radius for cleaner look
+
+    # Draw the circle background
+    turn_color = p.Color('white') if gs.white_to_move else p.Color('black')
+    p.draw.circle(screen, turn_color, (indicator_x, indicator_y), radius)
+
+    # Draw a border around the circle
+    border_color = p.Color('black') if gs.white_to_move else p.Color('white')
+    p.draw.circle(screen, border_color, (indicator_x, indicator_y), radius, 2)
+
+    # Determine turn text based on player color
+    humanTurn = (gs.white_to_move and humanWhite) or (not gs.white_to_move and humanBlack)
+    text = "Your turn" if humanTurn else "Computer's turn"
+    
+    # Add text label below the circle with adjusted spacing
+    font = p.font.SysFont('Helvetica', 16, True)
+    text_color = p.Color('white')  # White text for better contrast on dark background
+    text_surface = font.render(text, True, text_color)
+    text_rect = text_surface.get_rect(center=(indicator_x, indicator_y + radius + 20))
+    screen.blit(text_surface, text_rect)
+
 def drawSidebar():
-    """Draw a sidebar with undo/redo instructions."""
+    """Draw a sidebar with turn indicator, undo/redo buttons, and quit button with adjusted spacing."""
     # Draw sidebar background
     sidebar_rect = p.Rect(BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT)
-    p.draw.rect(screen, (50, 50, 50), sidebar_rect)  # Dark gray background
-    
-    # Title
-    font = p.font.SysFont('Helvetica', 24, True, False)
-    title_text = "Instructions"
-    title_object = font.render(title_text, True, (245, 245, 245))
-    title_rect = title_object.get_rect()
-    title_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
-    title_rect.top = 20
-    screen.blit(title_object, title_rect)
-    
-    # Undo instruction
-    font = p.font.SysFont('Helvetica', 20, True, False)
-    undo_text = "Undo: Ctrl+Z"
-    undo_object = font.render(undo_text, True, (245, 245, 245))
-    undo_rect = undo_object.get_rect()
-    undo_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
-    undo_rect.top = 60
-    screen.blit(undo_object, undo_rect)
-    
-    # Redo instruction
-    redo_text = "Redo: Ctrl+Y"
-    redo_object = font.render(redo_text, True, (245, 245, 245))
-    redo_rect = redo_object.get_rect()
-    redo_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
-    redo_rect.top = 90
-    screen.blit(redo_object, redo_rect)
+    p.draw.rect(screen, (40, 40, 40), sidebar_rect)  # Darker gray background
+
+    # Draw turn indicator at the top
+    drawTurnIndicator()
+
+    # Undo button (adjusted spacing below turn indicator)
+    undo_button_rect = p.Rect(BOARD_WIDTH + 20, 80, 80, 60)
+    p.draw.rect(screen, (60, 60, 60), undo_button_rect)  # Button background
+    p.draw.rect(screen, (100, 100, 100), undo_button_rect, 2)  # Border
+    # Draw left arrow
+    arrow_points = [
+        (BOARD_WIDTH + 40, 110),
+        (BOARD_WIDTH + 60, 90),
+        (BOARD_WIDTH + 60, 130)
+    ]
+    p.draw.polygon(screen, (245, 245, 245), arrow_points)
+
+    # Redo button (aligned with undo button)
+    redo_button_rect = p.Rect(BOARD_WIDTH + 100, 80, 80, 60)
+    p.draw.rect(screen, (60, 60, 60), redo_button_rect)  # Button background
+    p.draw.rect(screen, (100, 100, 100), redo_button_rect, 2)  # Border
+    # Draw right arrow
+    arrow_points = [
+        (BOARD_WIDTH + 140, 110),
+        (BOARD_WIDTH + 120, 90),
+        (BOARD_WIDTH + 120, 130)
+    ]
+    p.draw.polygon(screen, (245, 245, 245), arrow_points)
+
+    # Quit button (adjusted spacing from the bottom)
+    quit_button_rect = p.Rect(BOARD_WIDTH + 20, 668, 160, 30)
+    p.draw.rect(screen, (200, 50, 50), quit_button_rect)  # Red button background
+    font = p.font.SysFont('Helvetica', 18, True, False)
+    quit_text = "Quit to Menu"
+    quit_object = font.render(quit_text, True, (245, 245, 245))
+    quit_rect = quit_object.get_rect()
+    quit_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
+    quit_rect.centery = 683
+    screen.blit(quit_object, quit_rect)
 
 def exitGame():
     """Clean up and exit."""
