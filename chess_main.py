@@ -186,7 +186,7 @@ def main():
                         moveMade = True
 
         # AI move finder
-        if not moveMade and not gs.gameover and not humanTurn and not gs.undo_log:
+        if not moveMade and not gs.gameover and not humanTurn:
             AIMove = ai.getBestMove(gs)
             if AIMove is None:
                 AIMove = ai.getRandomMove(validMoves)
