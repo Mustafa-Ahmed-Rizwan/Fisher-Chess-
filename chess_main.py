@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Main Chess960 (Fischer Random Chess) GUI implementation
+Main Chess960 (Fischer Random Chess) GUI implementation with sound effects
 """
 
 import os
@@ -23,16 +23,19 @@ DIMENSION = 8                           # 8x8 chess board
 SQ_SIZE = HEIGHT // DIMENSION
 MAX_FPS = 120                           # For animations
 IMAGES = {}                             # Stores piece images
+SOUNDS = {}                             # Stores sound effects
 FLIPPEDBOARD = [i for i in reversed(range(DIMENSION))]  # For black perspective
 UPSIDEDOWN = False                      # Board orientation
 selectedSquare = None                   # Currently selected square
+checkSoundPlayed = False                # Track if check sound has been played for current check state
+gameEndSoundPlayed = False              # Track if game-end sound has been played
 
 def main():
     """
     Main driver for Chess960 game.
     Handles user input and updates graphics.
     """
-    global screen, clock, theme, gs, highlight_last_move, UPSIDEDOWN, selectedSquare, humanWhite, humanBlack
+    global screen, clock, theme, gs, highlight_last_move, UPSIDEDOWN, selectedSquare, humanWhite, humanBlack, checkSoundPlayed, gameEndSoundPlayed
     
     # Initialize game settings
     humanWhite, humanBlack, theme_name = mainMenu()
@@ -40,6 +43,8 @@ def main():
         theme_name = "blue"
     
     p.init()
+    # Initialize Pygame mixer for sound playback
+    p.mixer.init()
     screen = p.display.set_mode((WIDTH, HEIGHT))
     p.display.set_caption(CAPTION)
     clock = p.time.Clock()
@@ -52,8 +57,9 @@ def main():
     validMoves = gs.valid_moves
     moveMade = False
     
-    # Load piece images only once
+    # Load piece images and sounds
     loadImages()
+    loadSounds()
     
     # Game state variables
     squareClicked = ()          # Last square clicked
@@ -79,7 +85,7 @@ def main():
                 if location[0] >= BOARD_WIDTH:
                     sidebar_x = location[0] - BOARD_WIDTH
                     sidebar_y = location[1]
-                    # Undo button area: 20-100, 80-140 (adjusted for new spacing)
+                    # Undo button area: 20-100, 80-140
                     if (sidebar_x >= 20 and sidebar_x <= 100 and
                         sidebar_y >= 80 and sidebar_y <= 140):
                         if gs.move_log:
@@ -88,7 +94,7 @@ def main():
                             animateMove(move, validMoves, undo=True)
                             print(f'Undid {move}', end=' ')
                             moveMade = True
-                    # Redo button area: 100-180, 80-140 (adjusted for new spacing)
+                    # Redo button area: 100-180, 80-140
                     elif (sidebar_x >= 100 and sidebar_x <= 180 and
                           sidebar_y >= 80 and sidebar_y <= 140):
                         if gs.undo_log:
@@ -97,7 +103,7 @@ def main():
                             animateMove(move, validMoves)
                             print(f'Redid {move}', end=' ')
                             moveMade = True
-                    # Quit button area: 20-180, 650-680 (adjusted for new spacing)
+                    # Quit button area: 20-180, 650-680
                     elif (sidebar_x >= 20 and sidebar_x <= 180 and
                           sidebar_y >= 650 and sidebar_y <= 680):
                         # Reset game state and return to main menu
@@ -208,7 +214,7 @@ def main():
         # Draw the sidebar and instructions
         drawSidebar()
 
-        # Display game over message
+        # Display game over message and play game-end sound
         if gs.gameover:
             s = p.Surface((BOARD_WIDTH, HEIGHT))
             s.fill((0, 0, 0))
@@ -216,13 +222,32 @@ def main():
             screen.blit(s, (0, 0))
             
             if gs.checkmate:
-                winner = "Black" if gs.white_to_move else "White"
-                drawText(f'{winner} wins by checkmate!', 48)
+                # Determine if the human or computer won
+                if gs.white_to_move:  # White is checkmated, Black wins
+                    if humanBlack:
+                        winner_text = "You won by checkmate!"
+                    else:
+                        winner_text = "Computer Won by checkmate!"
+                else:  # Black is checkmated, White wins
+                    if humanWhite:
+                        winner_text = "You won by checkmate!"
+                    else:
+                        winner_text = "Computer Won by checkmate!"
+                drawText(winner_text, 48)
             elif gs.stalemate:
                 if gs.stalemate_counter > 100:
                     drawText('Draw by 50-move rule', 36)
                 else:
                     drawText('Stalemate - Draw', 36)
+            
+            # Play game-end sound only once
+            if not gameEndSoundPlayed:
+                SOUNDS['game_end'].play()
+                gameEndSoundPlayed = True
+
+        # Reset game-end sound flag if the game is no longer over (e.g., after undo)
+        if not gs.gameover and gameEndSoundPlayed:
+            gameEndSoundPlayed = False
 
         clock.tick(MAX_FPS)
         p.display.flip()
@@ -249,6 +274,35 @@ def loadImages():
                 # Create blank surface if image missing
                 IMAGES[pieceName] = p.Surface((SQ_SIZE, SQ_SIZE))
                 IMAGES[pieceName].fill((200, 200, 200))
+
+def loadSounds():
+    """Initialize dictionary of sound effects."""
+    sound_files = ['move', 'capture', 'check', 'game_end']
+    
+    # Use absolute path relative to this file
+    sounds_dir = os.path.join(os.path.dirname(__file__), 'sounds')
+
+    for sound in sound_files:
+        try:
+            sound_path = os.path.join(sounds_dir, f"{sound}.wav")
+            SOUNDS[sound] = p.mixer.Sound(sound_path)
+            # Set volume (0.0 to 1.0)
+            SOUNDS[sound].set_volume(0.5)
+        except Exception as e:
+            print(f"Warning: Could not load sound for {sound}. Error: {e}")
+            # Create a silent sound as fallback
+            SOUNDS[sound] = p.mixer.Sound(p.mixer.Sound(buffer=b'\x00' * 1000))
+
+def playSound(move, undo=False):
+    """Play appropriate sound based on the move."""
+    if undo:
+        return  # Don't play sounds when undoing moves
+    
+    # Check for capture (including en passant)
+    if move.piece_captured is not None or move.contains_enpassant():
+        SOUNDS['capture'].play()
+    else:
+        SOUNDS['move'].play()
 
 def drawGameState(validMoves):
     """Draw complete game state including board, pieces, highlights."""
@@ -328,7 +382,9 @@ def highlightSquares(validMoves):
         screen.blit(attackSquare, (file * SQ_SIZE, rank * SQ_SIZE))
 
 def drawPieces():
-    """Draw pieces on their current squares."""
+    """Draw pieces on their current squares and play check sound if needed."""
+    global checkSoundPlayed
+    
     for piece in gs.board.get_pieces():
         if piece.is_on_board():
             file, rank = getSquareCoordinates(piece.get_square())
@@ -339,7 +395,7 @@ def drawPieces():
                     SQ_SIZE, SQ_SIZE
                 )
             )
-            # Draw red border around king if in check
+            # Draw red border around king if in check and play sound
             if gs.in_check and (piece.get_name() == 'King' and piece.get_color() == ('white' if gs.white_to_move else 'black')):
                 border_width = 2
                 border_color = p.Color('red')
@@ -350,6 +406,13 @@ def drawPieces():
                     SQ_SIZE + 2 * border_width
                 )
                 p.draw.rect(screen, border_color, border_rect, border_width)
+                # Play check sound only once per check state
+                if not checkSoundPlayed:
+                    SOUNDS['check'].play()
+                    checkSoundPlayed = True
+    # Reset check sound flag if no longer in check
+    if not gs.in_check and checkSoundPlayed:
+        checkSoundPlayed = False
 
 def markMovementSquares(square, validMoves):
     """Find squares this piece can move to/capture on."""
@@ -366,7 +429,7 @@ def markMovementSquares(square, validMoves):
     return moveSquares, captureSquares
 
 def animateMove(move, validMoves, undo=False):
-    """Animate piece movement."""
+    """Animate piece movement and play sound."""
     pieceMoved = move.piece_moved
     pieceCaptured = move.piece_captured
     startSquare, endSquare = (move.end_square, move.start_square) if undo else (move.start_square, move.end_square)
@@ -387,6 +450,9 @@ def animateMove(move, validMoves, undo=False):
         dRookRank = rookEndRank - rookStartRank
     
     framesPerMove = MAX_FPS // 10 + 1
+    
+    # Play sound at the start of the move animation
+    playSound(move, undo)
     
     for frame in range(1, framesPerMove + 1):
         drawBoard(validMoves)
@@ -551,18 +617,20 @@ def drawSidebar():
     p.draw.polygon(screen, (245, 245, 245), arrow_points)
 
     # Quit button (adjusted spacing from the bottom)
-    quit_button_rect = p.Rect(BOARD_WIDTH + 20, 668, 160, 30)
+    quit_button_rect = p.Rect(BOARD_WIDTH + 20, 650, 160, 30)
     p.draw.rect(screen, (200, 50, 50), quit_button_rect)  # Red button background
     font = p.font.SysFont('Helvetica', 18, True, False)
     quit_text = "Quit to Menu"
     quit_object = font.render(quit_text, True, (245, 245, 245))
     quit_rect = quit_object.get_rect()
     quit_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
-    quit_rect.centery = 683
+    quit_rect.centery = 665
     screen.blit(quit_object, quit_rect)
 
 def exitGame():
     """Clean up and exit."""
+    # Stop all sounds before exiting
+    p.mixer.stop()
     p.quit()
     sys.exit()
 
