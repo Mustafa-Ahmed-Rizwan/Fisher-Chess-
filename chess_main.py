@@ -29,20 +29,40 @@ UPSIDEDOWN = False                      # Board orientation
 selectedSquare = None                   # Currently selected square
 checkSoundPlayed = False                # Track if check sound has been played for current check state
 gameEndSoundPlayed = False              # Track if game-end sound has been played
+# Move history constants
+MOVE_HISTORY_FONT_SIZE = 16
+MOVE_HISTORY_LINE_HEIGHT = 24
+MOVE_HISTORY_MARGIN = 10
+MOVE_HISTORY_WIDTH = SIDEBAR_WIDTH - 2 * MOVE_HISTORY_MARGIN - 10  # Space for scrollbar
+MOVE_HISTORY_MAX_LINES = 19  # Maximum lines to show before scrolling
+MOVE_HISTORY_AREA_HEIGHT = HEIGHT - 250  # Reduced from HEIGHT - 200 to give more space at bottom  # Space from top to bottom of history area
+
+# Move history variables
+move_history_scroll = 0
+move_history_surface = None
+move_history_needs_update = True  # Track if we need to redraw
+
+# Sidebar static elements
+sidebar_static_surface = None
+sidebar_needs_update = True  # Track if sidebar static elements need redraw
 
 def main():
     """
     Main driver for Chess960 game.
     Handles user input and updates graphics.
     """
-    global screen, clock, theme, gs, highlight_last_move, UPSIDEDOWN, selectedSquare, humanWhite, humanBlack, checkSoundPlayed, gameEndSoundPlayed
-    
+    global screen, clock, theme, gs, highlight_last_move, UPSIDEDOWN, selectedSquare, humanWhite, humanBlack, checkSoundPlayed, gameEndSoundPlayed, move_history_surface, move_history_needs_update, move_history_scroll, sidebar_static_surface, sidebar_needs_update
+    global MOVE_HISTORY_FONT, MOVE_HISTORY_BOLD_FONT  # Declare global variables to be modified
+
     # Initialize game settings
     humanWhite, humanBlack, theme_name = mainMenu()
     if theme_name not in themes:
         theme_name = "blue"
     
     p.init()
+    # Fonts for move history (initialized after pygame.init())
+    MOVE_HISTORY_FONT = p.font.SysFont('Helvetica', MOVE_HISTORY_FONT_SIZE)
+    MOVE_HISTORY_BOLD_FONT = p.font.SysFont('Helvetica', MOVE_HISTORY_FONT_SIZE, bold=True)
     # Initialize Pygame mixer for sound playback
     p.mixer.init()
     screen = p.display.set_mode((WIDTH, HEIGHT))
@@ -94,6 +114,8 @@ def main():
                             animateMove(move, validMoves, undo=True)
                             print(f'Undid {move}', end=' ')
                             moveMade = True
+                            move_history_needs_update = True
+                            sidebar_needs_update = True  # Turn indicator needs update
                     # Redo button area: 100-180, 80-140
                     elif (sidebar_x >= 100 and sidebar_x <= 180 and
                           sidebar_y >= 80 and sidebar_y <= 140):
@@ -103,9 +125,11 @@ def main():
                             animateMove(move, validMoves)
                             print(f'Redid {move}', end=' ')
                             moveMade = True
-                    # Quit button area: 20-180, 650-680
+                            move_history_needs_update = True
+                            sidebar_needs_update = True  # Turn indicator needs update
+                    # Quit button area: 20-180, 668-698
                     elif (sidebar_x >= 20 and sidebar_x <= 180 and
-                          sidebar_y >= 650 and sidebar_y <= 680):
+                          sidebar_y >= 668 and sidebar_y <= 698):
                         # Reset game state and return to main menu
                         p.quit()
                         main()
@@ -154,6 +178,8 @@ def main():
                                     animateMove(validMove, validMoves)
                                     printMove(validMove)
                                     moveMade = True
+                                    move_history_needs_update = True
+                                    sidebar_needs_update = True  # Turn indicator needs update
                                     break
                             
                             if not moveMade:
@@ -166,7 +192,7 @@ def main():
                                     squareClicked = ()
                                     playerClicks = []
 
-            # Key handler for undo/redo with arrow keys
+            # Key handler for undo/redo with arrow keys and move history scroll
             elif e.type == p.KEYDOWN:
                 # Undo with left arrow key
                 if e.key == p.K_LEFT:
@@ -176,6 +202,8 @@ def main():
                         animateMove(move, validMoves, undo=True)
                         print(f'Undid {move}', end=' ')
                         moveMade = True
+                        move_history_needs_update = True
+                        sidebar_needs_update = True  # Turn indicator needs update
                 # Redo with right arrow key
                 elif e.key == p.K_RIGHT:
                     if gs.undo_log:
@@ -184,6 +212,18 @@ def main():
                         animateMove(move, validMoves)
                         print(f'Redid {move}', end=' ')
                         moveMade = True
+                        move_history_needs_update = True
+                        sidebar_needs_update = True  # Turn indicator needs update
+                # Scroll move history with up/down arrows
+                move_pairs = (len(gs.move_log) + 1) // 2
+                if move_pairs > MOVE_HISTORY_MAX_LINES:
+                    if e.key == p.K_UP:
+                        move_history_scroll = max(0, move_history_scroll - 1)
+                        move_history_needs_update = True
+                    elif e.key == p.K_DOWN:
+                        max_scroll = move_pairs - MOVE_HISTORY_MAX_LINES
+                        move_history_scroll = min(max_scroll, move_history_scroll + 1)
+                        move_history_needs_update = True
 
         # AI move finder
         if not moveMade and not gs.gameover and not humanTurn:
@@ -195,6 +235,8 @@ def main():
             animateMove(AIMove, validMoves)
             printMove(AIMove)
             moveMade = True
+            move_history_needs_update = True
+            sidebar_needs_update = True  # Turn indicator needs update
         
         # Update game state after move
         if moveMade:
@@ -258,7 +300,7 @@ def loadImages():
     colors = ['w', 'b']                      # White, Black
 
     # Use absolute path relative to this file
-    images_dir = os.path.join(os.path.dirname(__file__), 'images')
+    images_dir = os.path.join(os.path.dirname(__file__), 'utils', 'images')
 
     for color in colors:
         for piece in pieces:
@@ -280,7 +322,7 @@ def loadSounds():
     sound_files = ['move', 'capture', 'check', 'game_end']
     
     # Use absolute path relative to this file
-    sounds_dir = os.path.join(os.path.dirname(__file__), 'sounds')
+    sounds_dir = os.path.join(os.path.dirname(__file__), 'utils', 'sounds')
 
     for sound in sound_files:
         try:
@@ -560,17 +602,17 @@ def drawText(text, font_size, font='Helvetica', xoffset=0, yoffset=0):
 def drawTurnIndicator():
     """Draws a turn indicator at the top of the sidebar showing whose turn it is."""
     # Position and size of the turn indicator
-    indicator_x = BOARD_WIDTH + SIDEBAR_WIDTH // 2
+    indicator_x = SIDEBAR_WIDTH // 2
     indicator_y = 25  # Slightly higher for better alignment
     radius = 15  # Smaller radius for cleaner look
 
     # Draw the circle background
     turn_color = p.Color('white') if gs.white_to_move else p.Color('black')
-    p.draw.circle(screen, turn_color, (indicator_x, indicator_y), radius)
+    p.draw.circle(sidebar_static_surface, turn_color, (indicator_x, indicator_y), radius)
 
     # Draw a border around the circle
     border_color = p.Color('black') if gs.white_to_move else p.Color('white')
-    p.draw.circle(screen, border_color, (indicator_x, indicator_y), radius, 2)
+    p.draw.circle(sidebar_static_surface, border_color, (indicator_x, indicator_y), radius, 2)
 
     # Determine turn text based on player color
     humanTurn = (gs.white_to_move and humanWhite) or (not gs.white_to_move and humanBlack)
@@ -581,70 +623,181 @@ def drawTurnIndicator():
     text_color = p.Color('white')  # White text for better contrast on dark background
     text_surface = font.render(text, True, text_color)
     text_rect = text_surface.get_rect(center=(indicator_x, indicator_y + radius + 20))
-    screen.blit(text_surface, text_rect)
+    sidebar_static_surface.blit(text_surface, text_rect)
+
+def update_move_history_surface():
+    """Create or update the move history surface only when needed."""
+    global move_history_surface, move_history_needs_update, move_history_scroll
+    
+    if not move_history_needs_update and move_history_surface is not None:
+        return
+        
+    # Create surface if needed
+    if move_history_surface is None:
+        move_history_surface = p.Surface((MOVE_HISTORY_WIDTH, MOVE_HISTORY_AREA_HEIGHT), p.SRCALPHA)
+    
+    # Clear the surface with transparent background
+    move_history_surface.fill((0, 0, 0, 0))
+    
+    # Calculate total move pairs and adjust scroll position
+    move_pairs = (len(gs.move_log) + 1) // 2
+    max_scroll = max(0, move_pairs - MOVE_HISTORY_MAX_LINES)
+    move_history_scroll = min(move_history_scroll, max_scroll)
+    move_history_scroll = max(0, move_history_scroll)
+    
+    # Calculate visible range
+    start_line = move_history_scroll
+    end_line = min(move_pairs, start_line + MOVE_HISTORY_MAX_LINES)
+    
+    y_pos = MOVE_HISTORY_MARGIN
+    move_counter = start_line + 1
+    
+    # Draw move pairs
+    for i in range(start_line, end_line):
+        # Move number
+        move_num_text = f"{move_counter}."
+        move_num_surface = MOVE_HISTORY_BOLD_FONT.render(move_num_text, True, (200, 200, 200))
+        move_history_surface.blit(move_num_surface, (0, y_pos))
+        
+        # White move
+        white_move_index = i * 2
+        if white_move_index < len(gs.move_log):
+            white_move = gs.move_log[white_move_index][0].name
+            white_surface = MOVE_HISTORY_FONT.render(white_move, True, (220, 220, 220))
+            move_history_surface.blit(white_surface, (40, y_pos))
+        
+        # Black move (if exists)
+        black_move_index = i * 2 + 1
+        if black_move_index < len(gs.move_log):
+            black_move = gs.move_log[black_move_index][0].name
+            black_surface = MOVE_HISTORY_FONT.render(black_move, True, (180, 180, 180))
+            move_history_surface.blit(black_surface, (120, y_pos))
+        
+        y_pos += MOVE_HISTORY_LINE_HEIGHT
+        move_counter += 1
+    
+    move_history_needs_update = False
+
+def drawMoveHistory():
+    """Draw the move history in the sidebar with scrollbar and border."""
+    global move_history_needs_update, move_history_scroll
+    
+    # Update the surface if needed
+    update_move_history_surface()
+    
+    # Draw border around the move history area
+    border_rect = p.Rect(BOARD_WIDTH + MOVE_HISTORY_MARGIN - 2, 160 - 2, 
+                        MOVE_HISTORY_WIDTH + 4, MOVE_HISTORY_AREA_HEIGHT + 4)
+    p.draw.rect(screen, (150, 150, 150), border_rect, 2)
+    
+    # Blit the move history surface to the screen
+    screen.blit(move_history_surface, (BOARD_WIDTH + MOVE_HISTORY_MARGIN, 160))
+    
+    # Draw scrollbar if needed
+    move_pairs = (len(gs.move_log) + 1) // 2
+    if move_pairs > MOVE_HISTORY_MAX_LINES:
+        # Calculate scrollbar position and size
+        scrollbar_width = 8
+        scrollbar_x = BOARD_WIDTH + SIDEBAR_WIDTH - scrollbar_width - 2
+        
+        scrollbar_height = MOVE_HISTORY_AREA_HEIGHT * (MOVE_HISTORY_MAX_LINES / move_pairs)
+        scrollbar_height = max(20, scrollbar_height)  # Minimum height
+        
+        scroll_range = move_pairs - MOVE_HISTORY_MAX_LINES
+        scroll_pos = (move_history_scroll / scroll_range) * (MOVE_HISTORY_AREA_HEIGHT - scrollbar_height) if scroll_range > 0 else 0
+        
+        # Draw scrollbar track
+        p.draw.rect(screen, (50, 50, 50), 
+                   (scrollbar_x, 160, scrollbar_width, MOVE_HISTORY_AREA_HEIGHT))
+        
+        # Draw scrollbar thumb
+        p.draw.rect(screen, (120, 120, 120), 
+                   (scrollbar_x, 160 + scroll_pos, scrollbar_width, scrollbar_height))
+
+def update_sidebar_static():
+    """Update static sidebar elements (turn indicator, buttons)."""
+    global sidebar_static_surface, sidebar_needs_update
+    
+    if not sidebar_needs_update and sidebar_static_surface is not None:
+        return
+    
+    # Create surface if needed
+    if sidebar_static_surface is None:
+        sidebar_static_surface = p.Surface((SIDEBAR_WIDTH, HEIGHT), p.SRCALPHA)
+    
+    # Clear the surface with transparent background
+    sidebar_static_surface.fill((0, 0, 0, 0))
+    
+    # Draw static elements
+    drawTurnIndicator()
+    
+    # Draw buttons
+    drawSidebarButtons()
+    
+    # Draw quit button
+    drawQuitButton()
+    
+    sidebar_needs_update = False
 
 def drawSidebar():
-    """Draw a sidebar with turn indicator, undo/redo buttons, and quit button with adjusted spacing."""
-    # Draw sidebar background with a cool metallic gradient
-    sidebar_rect = p.Rect(BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT)
-    # Create a surface for the gradient
-    sidebar_surface = p.Surface((SIDEBAR_WIDTH, HEIGHT))
-    for y in range(HEIGHT):
-        r = 50 + (y / HEIGHT) * 20  # Subtle red gradient
-        g = 50 + (y / HEIGHT) * 20  # Subtle green gradient
-        b = 60 + (y / HEIGHT) * 30  # Subtle blue gradient
-        p.draw.line(sidebar_surface, (r, g, b), (0, y), (SIDEBAR_WIDTH, y))
-    screen.blit(sidebar_surface, (BOARD_WIDTH, 0))
+    """Draw the sidebar with optimized rendering."""
+    global sidebar_static_surface
+    
+    # Draw sidebar background (only redraw if needed)
+    if move_history_needs_update or move_history_surface is None:
+        sidebar_rect = p.Rect(BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT)
+        p.draw.rect(screen, (40, 40, 50), sidebar_rect)
+        
+        # Draw stylish border
+        border_color_inner = (80, 80, 80)
+        border_color_outer = (120, 120, 120)
+        p.draw.rect(screen, border_color_inner, (BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT), 2)
+        p.draw.rect(screen, border_color_outer, (BOARD_WIDTH - 2, -2, SIDEBAR_WIDTH + 4, HEIGHT + 4), 4)
+    
+    # Update and draw static sidebar elements
+    update_sidebar_static()
+    screen.blit(sidebar_static_surface, (BOARD_WIDTH, 0))
+    
+    # Draw move history
+    drawMoveHistory()
 
-    # Draw shadow effect
-    shadow_surface = p.Surface((SIDEBAR_WIDTH + 10, HEIGHT + 10), p.SRCALPHA)
-    p.draw.rect(shadow_surface, (0, 0, 0, 100), (5, 5, SIDEBAR_WIDTH, HEIGHT))  # Semi-transparent shadow
-    screen.blit(shadow_surface, (BOARD_WIDTH - 5, -5))
-
-    # Draw stylish border
-    border_color_inner = (80, 80, 80)  # Dark gray inner border
-    border_color_outer = (120, 120, 120)  # Light gray outer border
-    p.draw.rect(screen, border_color_inner, (BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT), 2)  # Inner border
-    p.draw.rect(screen, border_color_outer, (BOARD_WIDTH - 2, -2, SIDEBAR_WIDTH + 4, HEIGHT + 4), 4)  # Outer border
-
-    # Draw turn indicator at the top
-    drawTurnIndicator()
-
-    # Undo button (adjusted spacing below turn indicator)
-    undo_button_rect = p.Rect(BOARD_WIDTH + 20, 80, 80, 60)
-    p.draw.rect(screen, (40, 40, 40), undo_button_rect)  # Darker button background for contrast
-    p.draw.rect(screen, (150, 150, 150), undo_button_rect, 2)  # Lighter border
-    # Draw left arrow
+def drawSidebarButtons():
+    """Draw undo and redo buttons on the sidebar static surface."""
+    # Undo button
+    undo_button_rect = p.Rect(20, 80, 80, 60)
+    p.draw.rect(sidebar_static_surface, (40, 40, 40), undo_button_rect)
+    p.draw.rect(sidebar_static_surface, (150, 150, 150), undo_button_rect, 2)
     arrow_points = [
-        (BOARD_WIDTH + 40, 110),
-        (BOARD_WIDTH + 60, 90),
-        (BOARD_WIDTH + 60, 130)
+        (40, 110),
+        (60, 90),
+        (60, 130)
     ]
-    p.draw.polygon(screen, (200, 200, 200), arrow_points)
+    p.draw.polygon(sidebar_static_surface, (200, 200, 200), arrow_points)
 
-    # Redo button (aligned with undo button)
-    redo_button_rect = p.Rect(BOARD_WIDTH + 100, 80, 80, 60)
-    p.draw.rect(screen, (40, 40, 40), redo_button_rect)
-    p.draw.rect(screen, (150, 150, 150), redo_button_rect, 2)
-    # Draw right arrow
+    # Redo button
+    redo_button_rect = p.Rect(100, 80, 80, 60)
+    p.draw.rect(sidebar_static_surface, (40, 40, 40), redo_button_rect)
+    p.draw.rect(sidebar_static_surface, (150, 150, 150), redo_button_rect, 2)
     arrow_points = [
-        (BOARD_WIDTH + 140, 110),
-        (BOARD_WIDTH + 120, 90),
-        (BOARD_WIDTH + 120, 130)
+        (140, 110),
+        (120, 90),
+        (120, 130)
     ]
-    p.draw.polygon(screen, (200, 200, 200), arrow_points)
+    p.draw.polygon(sidebar_static_surface, (200, 200, 200), arrow_points)
 
-    # Quit button (adjusted spacing from the bottom)
-    quit_button_rect = p.Rect(BOARD_WIDTH + 20, 668, 160, 30)
-    p.draw.rect(screen, (150, 40, 40), quit_button_rect)  # Deeper red for a cool effect
+def drawQuitButton():
+    """Draw quit button on the sidebar static surface."""
+    # Move button up by increasing the subtraction from HEIGHT
+    quit_button_rect = p.Rect(20, HEIGHT - 60, 160, 30)  # Changed from HEIGHT - 40 to HEIGHT - 60
+    p.draw.rect(sidebar_static_surface, (150, 40, 40), quit_button_rect)
+    
     font = p.font.SysFont('Helvetica', 18, True, False)
     quit_text = "Quit to Menu"
     quit_object = font.render(quit_text, True, (245, 245, 245))
     quit_rect = quit_object.get_rect()
-    quit_rect.centerx = BOARD_WIDTH + SIDEBAR_WIDTH // 2
-    quit_rect.centery = 683
-    screen.blit(quit_object, quit_rect)
-
+    quit_rect.centerx = SIDEBAR_WIDTH // 2
+    quit_rect.centery = HEIGHT - 45  # Changed from HEIGHT - 25 to HEIGHT - 45
+    sidebar_static_surface.blit(quit_object, quit_rect)
 def exitGame():
     """Clean up and exit."""
     # Stop all sounds before exiting
