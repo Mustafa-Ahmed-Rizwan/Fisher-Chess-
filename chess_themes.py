@@ -29,15 +29,6 @@ themes = {
         (32, 154, 215),   # Dark last move
     ),
     
-    'yellow': (
-        (247, 241, 142),  # Light squares
-        (244, 215, 4),    # Dark squares
-        (253, 187, 115),  # Light highlighted
-        (255, 129, 45),   # Dark highlighted
-        (116, 194, 229),  # Light last move
-        (32, 154, 215),   # Dark last move
-    ),
-    
     'green': (
         (232, 235, 239),  # Light squares
         (119, 153, 84),    # Dark squares

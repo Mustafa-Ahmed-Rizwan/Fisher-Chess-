@@ -73,7 +73,7 @@ def mainMenu():
         # Board Theme Label and Dropdown with smaller font and shifted right
         theme_label = canvas.create_text(60, 100, text="Board Theme:", 
                                         font=("Times", 12, "bold"), fill=TEXT_COLOR)
-        theme_list = ["blue", "bw", "yellow", "green", "wood", "purple"]
+        theme_list = ["blue", "bw","green", "wood", "purple"]
         theme_menu = ttk.Combobox(root, values=theme_list, state="readonly", font=("Times", 12))
         theme_menu.set("blue")
         theme_menu.place(x=120, y=90, width=120)  # Adjusted position and width
