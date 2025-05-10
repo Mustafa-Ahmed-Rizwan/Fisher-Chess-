@@ -6,6 +6,7 @@ Chess960 Game Menu - Modified for Fischer Random Chess with Vintage Theme
 import tkinter as tk
 from tkinter import ttk
 from random import randrange
+import sys
 
 def mainMenu():
     """
@@ -27,6 +28,13 @@ def mainMenu():
     root = tk.Tk()
     root.geometry(SCREEN_SIZE)
     root.title(WINDOW_TITLE)
+
+    # Handle window close event (clicking "X")
+    def on_closing():
+        root.destroy()
+        sys.exit()  # Exit the program entirely when the window is closed
+
+    root.protocol("WM_DELETE_WINDOW", on_closing)  # Register the close event handler
     
     try:
         # Create canvas for background and border
@@ -73,7 +81,7 @@ def mainMenu():
         # Board Theme Label and Dropdown with smaller font and shifted right
         theme_label = canvas.create_text(60, 100, text="Board Theme:", 
                                         font=("Times", 12, "bold"), fill=TEXT_COLOR)
-        theme_list = ["blue", "bw","green", "wood", "purple"]
+        theme_list = ["blue", "bw", "green", "wood", "purple"]
         theme_menu = ttk.Combobox(root, values=theme_list, state="readonly", font=("Times", 12))
         theme_menu.set("blue")
         theme_menu.place(x=120, y=90, width=120)  # Adjusted position and width
@@ -112,9 +120,11 @@ def mainMenu():
         humanWhite = humanBlack = theme = None
         root.mainloop()
         
+        # After mainloop exits (via "Start Game" button), return the selected values
         return (humanWhite, humanBlack, theme)
         
     except Exception as e:
         print(f"Error in menu: {str(e)}")
         root.destroy()
-        return (None, None, "blue")  # Return default values if error occurs
+        sys.exit()  # Exit the program on any error
+        return (None, None, "blue")  # This line will never be reached due to sys.exit()
