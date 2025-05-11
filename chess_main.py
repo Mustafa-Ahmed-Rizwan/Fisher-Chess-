@@ -8,6 +8,10 @@ import os
 import sys
 import pygame as p
 import random
+import csv
+import datetime
+import time
+import chess_board
 
 import chess_engine
 import chess_ai as ai
@@ -46,13 +50,25 @@ move_history_needs_update = True  # Track if we need to redraw
 sidebar_static_surface = None
 sidebar_needs_update = True  # Track if sidebar static elements need redraw
 
+# Game data tracking
+game_id_counter = 0  # Unique ID for each game
+game_already_saved = False
+
 def main():
     """
     Main driver for Chess960 game.
     Handles user input and updates graphics.
     """
-    global screen, clock, theme, gs, highlight_last_move, UPSIDEDOWN, selectedSquare, humanWhite, humanBlack, checkSoundPlayed, gameEndSoundPlayed, move_history_surface, move_history_needs_update, move_history_scroll, sidebar_static_surface, sidebar_needs_update
-    global MOVE_HISTORY_FONT, MOVE_HISTORY_BOLD_FONT  # Declare global variables to be modified
+    global game_already_saved, screen, clock, theme, gs, highlight_last_move
+    global UPSIDEDOWN, selectedSquare, humanWhite, humanBlack
+    global checkSoundPlayed, gameEndSoundPlayed
+    global move_history_surface, move_history_needs_update, move_history_scroll
+    global sidebar_static_surface, sidebar_needs_update
+    global MOVE_HISTORY_FONT, MOVE_HISTORY_BOLD_FONT
+
+    # Reset all game state variables using the new function
+    reset_game_state()
+    game_already_saved = False
 
     # Initialize game settings
     humanWhite, humanBlack, theme_name = mainMenu()
@@ -86,6 +102,9 @@ def main():
     playerClicks = []           # Track player clicks (two squares per move)
     highlight_last_move = True  # Highlight last move
     
+    # Get starting position for this game
+    starting_position = ''.join(chess_board.generate_chess960_position())
+    
     # Set board orientation based on player color
     if humanBlack:
         UPSIDEDOWN = True
@@ -96,6 +115,7 @@ def main():
         
         for e in p.event.get():
             if e.type == p.QUIT:
+                save_game_data(gs, humanWhite, humanBlack, starting_position)
                 exitGame()
             
             # Mouse handler
@@ -130,7 +150,10 @@ def main():
                     # Quit button area: 20-180, 668-698
                     elif (sidebar_x >= 20 and sidebar_x <= 180 and
                           sidebar_y >= 668 and sidebar_y <= 698):
+                        # Save game data before quitting
+                        save_game_data(gs, humanWhite, humanBlack, starting_position)
                         # Reset game state and return to main menu
+                        reset_game_state()
                         p.quit()
                         main()
                         return
@@ -256,7 +279,7 @@ def main():
         # Draw the sidebar and instructions
         drawSidebar()
 
-        # Display game over message and play game-end sound
+        # Display game over message, play game-end sound, and save game data
         if gs.gameover:
             s = p.Surface((BOARD_WIDTH, HEIGHT))
             s.fill((0, 0, 0))
@@ -286,6 +309,9 @@ def main():
             if not gameEndSoundPlayed:
                 SOUNDS['game_end'].play()
                 gameEndSoundPlayed = True
+            
+            # Save game data
+            save_game_data(gs, humanWhite, humanBlack, starting_position)
 
         # Reset game-end sound flag if the game is no longer over (e.g., after undo)
         if not gs.gameover and gameEndSoundPlayed:
@@ -293,6 +319,68 @@ def main():
 
         clock.tick(MAX_FPS)
         p.display.flip()
+
+def save_game_data(gs, humanWhite, humanBlack, starting_position):
+    """
+    Saves game data to a CSV file with one row per game.
+    Columns: game_id, outcome, winner, move_count, avg_decision_time, starting_position, timestamp
+    """
+    global game_id_counter, game_already_saved
+    
+    # Check if this game has already been saved
+    if game_already_saved:
+        return
+        
+    # Determine game outcome and winner
+    if gs.checkmate:
+        outcome = "Checkmate"
+        if gs.white_to_move:  # White checkmated, Black wins
+            winner = "Human" if humanBlack else "Computer"
+        else:  # Black checkmated, White wins
+            winner = "Human" if humanWhite else "Computer"
+    elif gs.stalemate:
+        outcome = "Stalemate"
+        winner = "Draw"
+    else:
+        # Don't save incomplete games
+        return
+    
+    # Get move count (total moves in the game)
+    move_count = len(gs.move_log)
+    
+    # Get average decision time
+    decision_times = ai.get_and_reset_decision_times()
+    avg_decision_time = sum(decision_times) / len(decision_times) if decision_times else 0.0
+    
+    # Get timestamp
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Prepare CSV row
+    row = {
+        "game_id": game_id_counter,
+        "outcome": outcome,
+        "winner": winner,
+        "move_count": move_count,
+        "avg_decision_time": round(avg_decision_time, 4),
+        "starting_position": starting_position,
+        "timestamp": timestamp
+    }
+    
+    # Write to CSV
+    csv_file = "game_data.csv"
+    file_exists = os.path.isfile(csv_file)
+    
+    with open(csv_file, mode='a', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=row.keys())
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(row)
+    
+    # Mark this game as saved
+    game_already_saved = True
+    
+    # Increment game ID
+    game_id_counter += 1
 
 def loadImages():
     """Initialize dictionary of piece images."""
@@ -798,6 +886,27 @@ def drawQuitButton():
     quit_rect.centerx = SIDEBAR_WIDTH // 2
     quit_rect.centery = HEIGHT - 45  # Changed from HEIGHT - 25 to HEIGHT - 45
     sidebar_static_surface.blit(quit_object, quit_rect)
+def reset_game_state():
+    """Reset all game state variables when starting a new game."""
+    global move_history_surface, move_history_needs_update, move_history_scroll
+    global sidebar_static_surface, sidebar_needs_update
+    global selectedSquare, checkSoundPlayed, gameEndSoundPlayed, UPSIDEDOWN
+
+    # Reset game state variables
+    selectedSquare = None
+    checkSoundPlayed = False
+    gameEndSoundPlayed = False
+    UPSIDEDOWN = False
+
+    # Reset move history
+    move_history_surface = None
+    move_history_needs_update = True
+    move_history_scroll = 0
+
+    # Reset sidebar
+    sidebar_static_surface = None 
+    sidebar_needs_update = True
+
 def exitGame():
     """Clean up and exit."""
     # Stop all sounds before exiting

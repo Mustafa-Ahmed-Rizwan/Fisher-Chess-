@@ -5,6 +5,7 @@ Chess960 AI Implementation using Negamax with Alpha-Beta Pruning
 
 import random
 from copy import copy
+import time
 
 # Piece values for Chess960 (same as standard chess)
 PIECE_VALUES = {
@@ -23,6 +24,9 @@ MAX_DEPTH = 3  # Increase for stronger AI (slower)
 # Global variable for tracking best move
 nextMove = None
 
+# List to store AI decision times for each move in a game
+ai_decision_times = []
+
 def getRandomMove(validMoves):
     """Returns a random valid move."""
     return random.choice(validMoves) if validMoves else None
@@ -35,16 +39,23 @@ def getBestMove(gs):
     Returns:
         Move: Best move found
     """
-    global nextMove
+    global nextMove, ai_decision_times
     gs_copy = copy(gs)
     validMoves = gs_copy.valid_moves
     
     # Randomize move order to make AI less predictable
     random.shuffle(validMoves)
     
+    # Measure decision time
+    start_time = time.time()
+    
     nextMove = None
     negamaxAlphaBeta(gs_copy, validMoves, MAX_DEPTH, -CHECKMATE, CHECKMATE, 
                     1 if gs_copy.white_to_move else -1)
+    
+    # Record decision time
+    decision_time = time.time() - start_time
+    ai_decision_times.append(decision_time)
     
     return nextMove if nextMove else getRandomMove(validMoves)
 
@@ -132,3 +143,14 @@ def scoreMaterial(board):
             else:
                 score -= pieceValue
     return score
+
+def get_and_reset_decision_times():
+    """
+    Returns the list of AI decision times and resets it for the next game.
+    Returns:
+        list: List of decision times (in seconds) for the current game.
+    """
+    global ai_decision_times
+    times = ai_decision_times.copy()
+    ai_decision_times = []
+    return times
