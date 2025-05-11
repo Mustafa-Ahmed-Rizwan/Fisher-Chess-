@@ -23,11 +23,27 @@ def mainMenu():
     BORDER_COLOR = "#3b2b1d"
     BUTTON_FILL = "#f3e1b8"
     BUTTON_HOVER = "#e0d0a6"
-    SCREEN_SIZE = "400x240"  # Reduced size to fit theme better
+    SCREEN_SIZE = "400x240"  # Fixed size for the menu
     
     root = tk.Tk()
     root.geometry(SCREEN_SIZE)
     root.title(WINDOW_TITLE)
+    
+    # Make window non-resizable and disable maximize
+    root.resizable(False, False)
+    try:
+        if sys.platform == 'win32':
+            from ctypes import windll
+            # Get window handle
+            hwnd = windll.user32.GetParent(root.winfo_id())
+            # Get current style
+            style = windll.user32.GetWindowLongW(hwnd, -16)  # GWL_STYLE
+            # Remove maximize button but keep minimize
+            style = style & ~0x10000  # Remove WS_MAXIMIZEBOX
+            # Set new style
+            windll.user32.SetWindowLongW(hwnd, -16, style)
+    except:
+        pass  # Fallback for non-Windows platforms
 
     # Handle window close event (clicking "X")
     def on_closing():

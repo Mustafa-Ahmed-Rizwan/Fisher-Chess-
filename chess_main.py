@@ -18,9 +18,9 @@ import chess_ai as ai
 from chess_themes import themes
 from chess_menu import mainMenu
 
-# Constants
+#Constants
 CAPTION = 'Chess960 (Fischer Random Chess)'
-BOARD_WIDTH = HEIGHT = 720              # Board size in pixels
+BOARD_WIDTH = HEIGHT = 600              # Changed from 720 to 600 pixels
 SIDEBAR_WIDTH = 200                     # Width of the sidebar for instructions
 WIDTH = BOARD_WIDTH + SIDEBAR_WIDTH     # Total window width
 DIMENSION = 8                           # 8x8 chess board
@@ -38,7 +38,7 @@ MOVE_HISTORY_FONT_SIZE = 16
 MOVE_HISTORY_LINE_HEIGHT = 24
 MOVE_HISTORY_MARGIN = 10
 MOVE_HISTORY_WIDTH = SIDEBAR_WIDTH - 2 * MOVE_HISTORY_MARGIN - 10  # Space for scrollbar
-MOVE_HISTORY_MAX_LINES = 19  # Maximum lines to show before scrolling
+MOVE_HISTORY_MAX_LINES = 14  # Maximum lines to show before scrolling
 MOVE_HISTORY_AREA_HEIGHT = HEIGHT - 250  # Reduced from HEIGHT - 200 to give more space at bottom  # Space from top to bottom of history area
 
 # Move history variables
@@ -148,8 +148,10 @@ def main():
                             move_history_needs_update = True
                             sidebar_needs_update = True  # Turn indicator needs update
                     # Quit button area: 20-180, 668-698
+                    # Inside the MOUSEBUTTONDOWN event handler:
+# Quit button area
                     elif (sidebar_x >= 20 and sidebar_x <= 180 and
-                          sidebar_y >= 668 and sidebar_y <= 698):
+                        sidebar_y >= HEIGHT - 60 and sidebar_y <= HEIGHT - 30):
                         # Save game data before quitting
                         save_game_data(gs, humanWhite, humanBlack, starting_position)
                         # Reset game state and return to main menu
