@@ -9,8 +9,7 @@ Chess960, also known as Fischer Random Chess, is a chess variant with 960 possib
 ## Demo Video
 
 Watch a demo of the Chess960 game, showcasing gameplay, AI moves, and the user interface.
-
-
+https://github.com/user-attachments/assets/1d41816e-423c-4d09-9d19-24ba3a8530a0
 
 ---
 
@@ -116,6 +115,7 @@ Watch a demo of the Chess960 game, showcasing gameplay, AI moves, and the user i
 
 ```
 chess960/
+├── Fisher Chess.exe            # Standalone executable (Windows)
 ├── chess_main.py               # Main GUI driver (Pygame)
 ├── chess_engine.py             # Game state and move validation
 ├── chess_board.py              # Board setup and Chess960 position generation
