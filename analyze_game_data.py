@@ -13,10 +13,18 @@ def analyze_game_data(csv_file="game_data.csv"):
         csv_file (str): Path to the CSV file containing game data.
     """
     try:
-        # Read CSV file with correct column names
+        # Read CSV file with correct data types and headers
         df = pd.read_csv(csv_file, 
-                        names=['game_id', 'outcome', 'winner', 'move_count', 'avg_decision_time', 'starting_position', 'timestamp'],
-                        sep=',')  # Simple comma separator
+                        dtype={
+                            'game_id': int,
+                            'outcome': str,
+                            'winner': str,
+                            'move_count': int,
+                            'avg_decision_time': float,
+                            'starting_position': str,
+                            'timestamp': str
+                        },
+                        header=0)  # Use existing headers from file
         
         # Total number of games
         total_games = len(df)
