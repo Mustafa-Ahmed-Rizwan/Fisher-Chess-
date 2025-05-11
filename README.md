@@ -8,7 +8,10 @@ Chess960, also known as Fischer Random Chess, is a chess variant with 960 possib
 
 ## Demo Video
 
-Watch a demo of the Chess960 game, showcasing gameplay, AI moves, and the user interface.
+<video width="640" height="480" controls>
+  <source src="C:\Users\Mustafa\AppData\LocalLow\iTop Screen Recorder\Videos\project_demo.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
 
 
 ---
