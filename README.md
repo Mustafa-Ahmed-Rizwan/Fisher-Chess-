@@ -131,9 +131,6 @@ chess960/
 ├── utils/
 │   ├── images/                # Chess piece images (e.g., wK.png)
 │   └── sounds/                # Sound effects (e.g., move.wav)
-├── screenshots/               # Screenshots for README (add your own)
-├── demo/                      # Demo video (optional, add your video)
-├── game_data.csv              # Output: Game data
 ├── chess960_ai_report.txt     # Output: AI performance report
 ├── requirements.txt           # Python dependencies
 └── README.md                  # Project documentation
