@@ -15,15 +15,15 @@ def mainMenu():
         tuple: (humanWhite, humanBlack, theme_name)
     """
     WINDOW_TITLE = "Chess960 Settings"
-    WINDOW_BG_START = "#dec79b"
-    WINDOW_BG_END = "#cdb279"
-    CHESS_SQUARE_LIGHT = "#e8d3a4"
-    CHESS_SQUARE_DARK = "#cba86f"
-    TEXT_COLOR = "#3b2b1d"
-    BORDER_COLOR = "#3b2b1d"
-    BUTTON_FILL = "#f3e1b8"
-    BUTTON_HOVER = "#e0d0a6"
-    SCREEN_SIZE = "700x500"  # Increased width slightly, height more
+    WINDOW_BG_START = "#f0f0f0"      # Light gray background
+    WINDOW_BG_END = "#e6e6e6"        # Slightly darker gray (if you want a gradient)
+    CHESS_SQUARE_LIGHT = "#f0f0f0"   # Light square
+    CHESS_SQUARE_DARK = "#333333"    # Dark square
+    TEXT_COLOR = "#222222"           # Strong contrast text
+    BORDER_COLOR = "#000000"         # Black border
+    BUTTON_FILL = "#e6e6e6"          # Button normal
+    BUTTON_HOVER = "#cccccc"         # Button hover
+    SCREEN_SIZE = "700x500"# Increased width slightly, height more
 
     root = tk.Tk()
     root.geometry(SCREEN_SIZE)
@@ -46,6 +46,26 @@ def mainMenu():
         pass  # Fallback for non-Windows platforms
 
     # Handle window close event (clicking "X")
+    def create_rounded_rect(canvas, x1, y1, x2, y2, radius=20, **kwargs):
+        """
+        Draw a rounded rectangle on a Tkinter Canvas.
+        """
+        points = [
+            x1 + radius, y1,
+            x2 - radius, y1,
+            x2, y1,
+            x2, y1 + radius,
+            x2, y2 - radius,
+            x2, y2,
+            x2 - radius, y2,
+            x1 + radius, y2,
+            x1, y2,
+            x1, y2 - radius,
+            x1, y1 + radius,
+            x1, y1
+        ]
+        # Draw the main rectangle and four corner arcs
+        return canvas.create_polygon(points, smooth=True, **kwargs)
     def on_closing():
         root.destroy()
         sys.exit()  # Exit the program entirely when the window is closed
@@ -70,11 +90,15 @@ def mainMenu():
         if theme_menu:
             theme_menu.place_forget()
         
-        # Draw faint chessboard grid with larger squares
-        for i in range(0, 700, 100):
-            for j in range(0, 500, 100):
-                color = CHESS_SQUARE_LIGHT if (i // 100 + j // 100) % 2 == 0 else CHESS_SQUARE_DARK
-                canvas.create_rectangle(i, j, i + 100, j + 100, fill=color, outline="", width=0)
+        # Draw subtle chessboard grid with smaller, lighter squares (like main menu)
+        chess_squares = []
+        for i in range(0, 700, 50):  # 50x50 squares
+            for j in range(0, 500, 50):
+                color = "#e3eafc" if (i // 50 + j // 50) % 2 == 0 else "#d1dbe8"
+                square = canvas.create_rectangle(i, j, i + 50, j + 50, fill=color, outline="", width=0)
+                chess_squares.append(square)
+        # Overlay a semi-transparent white rectangle to soften the background
+        canvas.create_rectangle(0, 0, 700, 500, fill="white", outline="", stipple="gray25")
         
         # Draw double-lined border with adjusted dimensions
         canvas.create_rectangle(5, 5, 695, 495, outline=BORDER_COLOR, width=2)
@@ -122,7 +146,7 @@ def mainMenu():
         )
                 
                 # Back button with adjusted position
-        back_button_rect = canvas.create_rectangle(275, 400, 425, 450, fill=BUTTON_FILL, outline=BORDER_COLOR, width=2)
+        back_button_rect = create_rounded_rect(canvas, 275, 400, 425, 450, radius=20, fill=BUTTON_FILL, outline=BORDER_COLOR, width=2)
         back_button_text = canvas.create_text(350, 425, text="Back to Menu", 
                                                     font=("Times", 14), fill=TEXT_COLOR)
         
@@ -151,11 +175,14 @@ def mainMenu():
 
         # Draw faint chessboard grid with 100x100 squares
         chess_squares = []
-        for i in range(0, 700, 100):  # Changed from 550 to 700
-            for j in range(0, 500, 100):  # Changed from 400 to 500
-                color = CHESS_SQUARE_LIGHT if (i // 100 + j // 100) % 2 == 0 else CHESS_SQUARE_DARK
-                square = canvas.create_rectangle(i, j, i + 100, j + 100, fill=color, outline="", width=0)
+        for i in range(0, 700, 50):  # 50x50 squares
+            for j in range(0, 500, 50):
+                color = "#e3eafc" if (i // 50 + j // 50) % 2 == 0 else "#d1dbe8"
+                square = canvas.create_rectangle(i, j, i + 50, j + 50, fill=color, outline="", width=0)
                 chess_squares.append(square)
+        # Overlay a semi-transparent white rectangle to soften the background
+        # Tkinter doesn't support alpha directly, so simulate with a white rectangle and stipple
+        canvas.create_rectangle(0, 0, 700, 500, fill="white", outline="", stipple="gray25")
 
         # Draw double-lined border with new dimensions
         border1 = canvas.create_rectangle(5, 5, 695, 495, outline=BORDER_COLOR, width=2)
@@ -221,20 +248,14 @@ def mainMenu():
         def on_leave(e):
             canvas.itemconfig(start_button_rect, fill=BUTTON_FILL)
         
-        start_button_rect = canvas.create_rectangle(200, 300, 500, 350, 
-                                          fill=BUTTON_FILL, 
-                                          outline=BORDER_COLOR, 
-                                          width=2)  # Increased width to 300px
+        start_button_rect = create_rounded_rect(canvas, 200, 300, 500, 350, radius=20, fill=BUTTON_FILL, outline=BORDER_COLOR, width=2) # Increased width to 300px
         start_button_text = canvas.create_text(350, 325, 
                                             text="Start Chess960 Game!", 
                                             font=("Times", 18, "bold"),  # Increased font size
                                             fill=TEXT_COLOR)
 
         # About Button - keep same width as Start button
-        about_button_rect = canvas.create_rectangle(200, 370, 500, 420, 
-                                                fill=BUTTON_FILL, 
-                                                outline=BORDER_COLOR, 
-                                                width=2)
+        about_button_rect = create_rounded_rect(canvas, 200, 370, 500, 420, radius=20, fill=BUTTON_FILL, outline=BORDER_COLOR, width=2)
         about_button_text = canvas.create_text(350, 395, 
                                             text="About Chess960", 
                                             font=("Times", 18, "bold"),  # Match font size
