@@ -53,6 +53,9 @@ sidebar_needs_update = True  # Track if sidebar static elements need redraw
 # Game data tracking
 game_id_counter = 0  # Unique ID for each game
 game_already_saved = False
+LABEL_FONT_SIZE = 12
+LABEL_MARGIN = 3  # Margin from the edge of squares
+LABEL_COLOR = p.Color(200, 200, 200)  # Light gray color for labels
 
 def main():
     """
@@ -321,7 +324,40 @@ def main():
 
         clock.tick(MAX_FPS)
         p.display.flip()
+ 
+def drawBoardLabels():
+    """Draw rank (1-8) and file (a-h) labels on the board (bottom and left only), using theme colors."""
+    font = p.font.SysFont('Arial', 16, bold=True)
+    files = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']
+    ranks = ['8', '7', '6', '5', '4', '3', '2', '1']
 
+    if UPSIDEDOWN:
+        files = files[::-1]
+        ranks = ranks[::-1]
+
+    # Use theme colors for labels: light for dark squares, dark for light squares
+    label_color_light = p.Color(theme[0])  # Light square color
+    label_color_dark = p.Color(theme[1])   # Dark square color
+
+    
+    # Draw file labels (a-h) inside the bottom squares, at the bottom-right corner
+    for i in range(DIMENSION):
+        label_color = label_color_dark if (DIMENSION - 1) % 2 == i % 2 else label_color_light
+        label = font.render(files[i], True, label_color)
+        label_rect = label.get_rect()
+        x = i * SQ_SIZE + SQ_SIZE - label_rect.width - 2  # 2px padding from right (was 6)
+        y = (DIMENSION - 1) * SQ_SIZE + SQ_SIZE - label_rect.height - 4  # 4px padding from bottom
+        screen.blit(label, (x, y))
+
+    # Draw rank labels (1-8) on left side only, vertically centered
+    for i in range(DIMENSION):
+        label_color = label_color_dark if i % 2 == 0 else label_color_light
+        label = font.render(ranks[i], True, label_color)
+        label_rect = label.get_rect()
+        x = 6  # 6px padding from left
+        y = i * SQ_SIZE + (SQ_SIZE - label_rect.height) // 2
+        screen.blit(label, (x, y))
+        
 def save_game_data(gs, humanWhite, humanBlack, starting_position):
     """
     Saves game data to a CSV file with one row per game.
@@ -444,6 +480,7 @@ def drawGameState(validMoves):
     if selectedSquare is not None:
         highlightSquares(validMoves)
     drawPieces()
+    drawBoardLabels()  # Add this line to draw the labels
 
 def drawBoard(validMoves):
     """Draw squares on the board."""

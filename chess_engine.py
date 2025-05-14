@@ -209,7 +209,7 @@ class GameState():
             return
             
         rook_positions = (self.white_rooks_start_pos if king.get_color() == 'white' 
-                         else self.black_rooks_start_pos)
+                        else self.black_rooks_start_pos)
         rank = 7 if king.get_color() == 'white' else 0
             
         for rook_file, _ in rook_positions:
@@ -223,11 +223,15 @@ class GameState():
             direction = 1 if rook_file > king_file else -1
             steps = abs(rook_file - king_file)
                 
-            # Check path is clear
+            # Check path is clear between king and rook
             path_clear = True
             for i in range(1, steps):
                 check_file = king_file + (i * direction)
-                if not (0 <= check_file < self.file_size) or s[check_file, rank].has_piece():
+                if not (0 <= check_file < self.file_size):
+                    path_clear = False
+                    break
+                # Skip checking the rook square itself
+                if check_file != rook_file and s[check_file, rank].has_piece():
                     path_clear = False
                     break
                     
@@ -244,20 +248,21 @@ class GameState():
                     
             if safe:
                 castle_file = king_file + (2 * direction)
-                # Ensure castle_file is within bounds
-                if 0 <= castle_file < self.file_size:
+                # Ensure castle_file is within bounds and doesn't overlap with rook
+                if 0 <= castle_file < self.file_size and castle_file != rook_file:
                     castle_square = s[castle_file, rank]
-                    rook_end_file = king_file + (1 * direction)
-                    # Ensure rook_end_file is within bounds
-                    if 0 <= rook_end_file < self.file_size:
-                        rook_end_square = s[rook_end_file, rank]
-                        
-                        moves.append(Move(
-                            king_square,
-                            castle_square,
-                            self.move_number,
-                            castle=(rook, rook_square, rook_end_square)
-                        ))
+                    # Only add castle move if destination square is empty or is the rook's square
+                    if not castle_square.has_piece() or castle_square == rook_square:
+                        rook_end_file = king_file + (1 * direction)
+                        if 0 <= rook_end_file < self.file_size and rook_end_file != castle_file:
+                            rook_end_square = s[rook_end_file, rank]
+                            if not rook_end_square.has_piece() or rook_end_square == rook_square:
+                                moves.append(Move(
+                                    king_square,
+                                    castle_square,
+                                    self.move_number,
+                                    castle=(rook, rook_square, rook_end_square)
+                                ))
 
     def get_all_moves(self):
         moves = []
