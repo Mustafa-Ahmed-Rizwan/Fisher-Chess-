@@ -113,6 +113,12 @@ def main():
         UPSIDEDOWN = True
     
     # Main game loop
+    dragging_piece = None
+    drag_start_square = None
+    drag_offset = (0, 0)
+    drag_mouse_pos = (0, 0)
+    # ---------------------------------------------
+
     while True:
         humanTurn = (gs.white_to_move and humanWhite) or (not gs.white_to_move and humanBlack)
         
@@ -121,9 +127,57 @@ def main():
                 save_game_data(gs, humanWhite, humanBlack, starting_position)
                 exitGame()
             
-            # Mouse handler
+            # --- DRAG & DROP HANDLING ---
             elif e.type == p.MOUSEBUTTONDOWN:
-                location = p.mouse.get_pos()  # (x,y) location
+                location = p.mouse.get_pos()
+                if location[0] < BOARD_WIDTH and not gs.gameover and humanTurn:
+                    file = location[0] // SQ_SIZE
+                    rank = location[1] // SQ_SIZE
+                    if UPSIDEDOWN:
+                        file, rank = FLIPPEDBOARD[file], FLIPPEDBOARD[rank]
+                    square = gs.board.squares[file, rank]
+                    if square.has_piece():
+                        piece = square.get_piece()
+                        if ((piece.get_color() == 'white' and gs.white_to_move) or
+                            (piece.get_color() == 'black' and not gs.white_to_move)):
+                            dragging_piece = piece
+                            drag_start_square = square
+                            drag_mouse_pos = location
+                            drag_offset = (location[0] - file * SQ_SIZE, location[1] - rank * SQ_SIZE)
+                # --- Existing sidebar/undo/redo/quit code below here ---
+
+                # --- Click-to-move logic (unchanged, keep your existing code here) ---
+
+            elif e.type == p.MOUSEMOTION:
+                if dragging_piece:
+                    drag_mouse_pos = e.pos
+
+            elif e.type == p.MOUSEBUTTONUP:
+                if dragging_piece:
+                    location = e.pos
+                    if location[0] < BOARD_WIDTH:
+                        file = location[0] // SQ_SIZE
+                        rank = location[1] // SQ_SIZE
+                        if UPSIDEDOWN:
+                            file, rank = FLIPPEDBOARD[file], FLIPPEDBOARD[rank]
+                        end_square = gs.board.squares[file, rank]
+                        move = chess_engine.Move(drag_start_square, end_square, gs.move_number)
+                        for validMove in gs.valid_moves:
+                            if move == validMove:
+                                # Handle pawn promotion
+                                pieceMoved = validMove.piece_moved
+                                if pieceMoved.get_name() == 'Pawn' and pieceMoved.can_promote():
+                                    promoteMenu(validMove)
+                                gs.make_new_move(validMove)
+                                animateMove(validMove, gs.valid_moves)
+                                printMove(validMove)
+                                moveMade = True
+                                move_history_needs_update = True
+                                sidebar_needs_update = True
+                                break
+                    dragging_piece = None
+                    drag_start_square = None
+                    drag_offset = (0, 0) # (x,y) location
                 # Check if click is in sidebar for undo/redo buttons or quit button
                 if location[0] >= BOARD_WIDTH:
                     sidebar_x = location[0] - BOARD_WIDTH
@@ -279,7 +333,7 @@ def main():
 
         # Check game status
         gs.find_mate(validMoves)
-        drawGameState(validMoves)
+        drawGameState(validMoves, dragging_piece, drag_mouse_pos, drag_offset)
         
         # Draw the sidebar and instructions
         drawSidebar()
@@ -472,15 +526,15 @@ def playSound(move, undo=False):
     else:
         SOUNDS['move'].play()
 
-def drawGameState(validMoves):
+def drawGameState(validMoves, dragging_piece=None, drag_mouse_pos=None, drag_offset=(0, 0)):
     """Draw complete game state including board, pieces, highlights."""
     drawBoard(validMoves)
     if highlight_last_move:
         highlightLastMove()
     if selectedSquare is not None:
         highlightSquares(validMoves)
-    drawPieces()
-    drawBoardLabels()  # Add this line to draw the labels
+    drawPieces(dragging_piece, drag_mouse_pos, drag_offset)
+    drawBoardLabels()# Add this line to draw the labels
 
 def drawBoard(validMoves):
     """Draw squares on the board."""
@@ -550,7 +604,7 @@ def highlightSquares(validMoves):
         attackSquare.set_alpha(255)
         screen.blit(attackSquare, (file * SQ_SIZE, rank * SQ_SIZE))
 
-def drawPieces():
+def drawPieces(dragging_piece=None, drag_mouse_pos=None, drag_offset=(0, 0)):
     """Draw pieces on their current squares and play check sound if needed."""
     global checkSoundPlayed
 
@@ -563,8 +617,9 @@ def drawPieces():
 
     king_drawn = False  # Track if we've drawn the king in check
 
+    # Draw all pieces except the one being dragged
     for piece in gs.board.get_pieces():
-        if piece.is_on_board():
+        if piece.is_on_board() and piece != dragging_piece:
             file, rank = getSquareCoordinates(piece.get_square())
             pieceName = piece.get_image_name()
             screen.blit(
@@ -573,7 +628,7 @@ def drawPieces():
                     SQ_SIZE, SQ_SIZE
                 )
             )
-                        # Draw red border around the king that is actually in check (only once)
+            # Draw red border around the king that is actually in check (only once)
             if (not king_drawn and gs.in_check and
                 piece.get_name() == 'King' and
                 piece.get_color() == gs.check_color):
@@ -587,6 +642,12 @@ def drawPieces():
                 )
                 p.draw.rect(screen, border_color, border_rect, border_width)
                 king_drawn = True
+
+    # Draw the dragged piece following the mouse
+    if dragging_piece and drag_mouse_pos:
+        pieceName = dragging_piece.get_image_name()
+        x, y = drag_mouse_pos[0] - drag_offset[0], drag_mouse_pos[1] - drag_offset[1]
+        screen.blit(IMAGES[pieceName], (x, y))
 
 def markMovementSquares(square, validMoves):
     """Find squares this piece can move to/capture on."""
