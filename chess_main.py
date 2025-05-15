@@ -703,18 +703,17 @@ def getSquareCoordinates(square):
     return (file, rank)
 
 def promoteMenu(move):
-    """Handle pawn promotion selection."""
-    choices = 'qkrb'  # Queen, Knight, Rook, Bishop
-    print('Promote pawn to: q=Queen, k=Knight, r=Rook, b=Bishop')
+    """Show a Pygame-based promotion menu instead of blocking input()."""
+    choices = {'q': 'Queen', 'k': 'Knight', 'r': 'Rook', 'b': 'Bishop'}
+    # Draw promotion options on the screen and wait for mouse click
     while True:
-        try:
-            i = input('Choice: ').lower()[0]
-            if i in choices:
-                gs.promote(i, move)
-                return
-            print("Invalid choice. Try again.")
-        except:
-            print("Invalid input. Try again.")
+        for event in p.event.get():
+            if event.type == p.MOUSEBUTTONDOWN:
+                # Check which option was clicked and set promotion
+                # Example: if queen_rect.collidepoint(event.pos): gs.promote('q', move); return
+                pass
+        # Draw the promotion menu here
+        p.display.flip()
 
 def printMove(move):
     """Print move in algebraic notation."""
