@@ -22,8 +22,6 @@ https://github.com/user-attachments/assets/a33c2fc8-6e74-42a9-97d4-b77eb16bddf6
 - **Flexible Castling**: Implements Chess960-specific castling rules, allowing the king to move to various squares (depending on rook positions) with proper path-clearing and safety checks.
 - **AI Opponent**: Powered by Negamax with Alpha-Beta pruning, optimized for Chess960 with bishop pair bonuses (+0.5) and rook development penalties (-0.3).
 - **GUI**: Pygame-based interface with:
-  - **Drag-and-Drop Movement**: Intuitive piece movement by clicking to valid squares, with visual feedback for selected squares and possible moves.
-  - Animated piece movements and sound effects (move, capture, check, game-end).
   - Five board themes (blue, black-and-white, green, wood, purple) with distinct colors for light/dark squares, highlights, and last-move indicators.
   - Sidebar for move history (with scrolling), undo/redo buttons, quit option, and a turn indicator (white/black circle).
   - Board labels (a-h files, 1-8 ranks) displayed dynamically based on board orientation.
