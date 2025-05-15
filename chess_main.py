@@ -144,6 +144,7 @@ def main():
                             drag_start_square = square
                             drag_mouse_pos = location
                             drag_offset = (location[0] - file * SQ_SIZE, location[1] - rank * SQ_SIZE)
+                            selectedSquare = square
                 # --- Existing sidebar/undo/redo/quit code below here ---
 
                 # --- Click-to-move logic (unchanged, keep your existing code here) ---
@@ -531,22 +532,21 @@ def drawGameState(validMoves, dragging_piece=None, drag_mouse_pos=None, drag_off
     drawBoard(validMoves)
     if highlight_last_move:
         highlightLastMove()
-    if selectedSquare is not None:
+    if selectedSquare is not None and not dragging_piece:
         highlightSquares(validMoves)
     drawPieces(dragging_piece, drag_mouse_pos, drag_offset)
-    drawBoardLabels()# Add this line to draw the labels
+    drawBoardLabels()
 
 def drawBoard(validMoves):
     """Draw squares on the board."""
     global selectedSquare
-    selectedSquare = None
-    
+
+    # Do NOT reset selectedSquare here!
     for square in gs.board.squares.T.flat:
         file, rank = getSquareCoordinates(square)
         if square.is_selected():
             selectedSquare = square
         color = getSquareThemeColor(square)
-        
         p.draw.rect(
             screen, color, p.Rect(
                 file * SQ_SIZE, rank * SQ_SIZE,
