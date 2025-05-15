@@ -26,6 +26,7 @@ class GameState():
         self.pins = []
         self.checks = []
         self.in_check = False
+        self.check_color = None 
         self.gameover = False
         self.checkmate = False
         self.stalemate = False
@@ -154,6 +155,7 @@ class GameState():
         kingFile, kingRank = king.get_coords()
         if self.checks:
             self.in_check = True
+            self.check_color = 'white' if self.white_to_move else 'black'
             if len(self.checks) == 1:
                 moves = self.get_all_moves()
                 check = self.checks[0]
@@ -182,6 +184,7 @@ class GameState():
                 self.get_king_and_knight_moves(king, moves)
         else:
             self.in_check = False
+            self.check_color = None  # Not in check, so no color
             moves = self.get_all_moves()
 
         if moves:

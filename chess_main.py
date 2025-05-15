@@ -553,7 +553,16 @@ def highlightSquares(validMoves):
 def drawPieces():
     """Draw pieces on their current squares and play check sound if needed."""
     global checkSoundPlayed
-    
+
+    # Play check sound only once per check state (before drawing)
+    if gs.in_check and not checkSoundPlayed:
+        SOUNDS['check'].play()
+        checkSoundPlayed = True
+    elif not gs.in_check and checkSoundPlayed:
+        checkSoundPlayed = False
+
+    king_drawn = False  # Track if we've drawn the king in check
+
     for piece in gs.board.get_pieces():
         if piece.is_on_board():
             file, rank = getSquareCoordinates(piece.get_square())
@@ -564,8 +573,10 @@ def drawPieces():
                     SQ_SIZE, SQ_SIZE
                 )
             )
-            # Draw red border around king if in check and play sound
-            if gs.in_check and (piece.get_name() == 'King' and piece.get_color() == ('white' if gs.white_to_move else 'black')):
+                        # Draw red border around the king that is actually in check (only once)
+            if (not king_drawn and gs.in_check and
+                piece.get_name() == 'King' and
+                piece.get_color() == gs.check_color):
                 border_width = 2
                 border_color = p.Color('red')
                 border_rect = p.Rect(
@@ -575,13 +586,7 @@ def drawPieces():
                     SQ_SIZE + 2 * border_width
                 )
                 p.draw.rect(screen, border_color, border_rect, border_width)
-                # Play check sound only once per check state
-                if not checkSoundPlayed:
-                    SOUNDS['check'].play()
-                    checkSoundPlayed = True
-    # Reset check sound flag if no longer in check
-    if not gs.in_check and checkSoundPlayed:
-        checkSoundPlayed = False
+                king_drawn = True
 
 def markMovementSquares(square, validMoves):
     """Find squares this piece can move to/capture on."""
