@@ -5,7 +5,8 @@
 Chess960, also known as Fischer Random Chess, is a chess variant with 960 possible starting positions, randomizing the back-rank pieces to reduce reliance on memorized openings. This project implements a fully functional Chess960 game with a Pygame-based graphical user interface (GUI), an AI opponent powered by the Negamax algorithm with Alpha-Beta pruning, and a data analysis module to evaluate AI performance. Key features include animated moves, sound effects, customizable board themes, and game data tracking. The project showcases skills in Python programming, AI development, GUI design, and data analysis, making it an engaging platform for chess enthusiasts and AI researchers.
 
 
-![image](https://github.com/user-attachments/assets/bce6a013-4679-4f09-9a96-2d5bfde90059)
+![image](https://github.com/user-attachments/assets/9df1d7eb-47f0-4d2a-9d74-38abf6c75f42)
+
 
 
 ---
