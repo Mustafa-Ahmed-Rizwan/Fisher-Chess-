@@ -18,7 +18,7 @@ import chess_ai as ai
 from chess_themes import themes
 from chess_menu import mainMenu
 
-#Constants
+# Constants
 CAPTION = 'Chess960 (Fischer Random Chess)'
 BOARD_WIDTH = HEIGHT = 600              # Changed from 720 to 600 pixels
 SIDEBAR_WIDTH = 200                     # Width of the sidebar for instructions
@@ -39,17 +39,14 @@ MOVE_HISTORY_LINE_HEIGHT = 24
 MOVE_HISTORY_MARGIN = 10
 MOVE_HISTORY_WIDTH = SIDEBAR_WIDTH - 2 * MOVE_HISTORY_MARGIN - 10  # Space for scrollbar
 MOVE_HISTORY_MAX_LINES = 14  # Maximum lines to show before scrolling
-MOVE_HISTORY_AREA_HEIGHT = HEIGHT - 250  # Reduced from HEIGHT - 200 to give more space at bottom  # Space from top to bottom of history area
-
+MOVE_HISTORY_AREA_HEIGHT = HEIGHT - 250  # Reduced from HEIGHT - 200 to give more space at bottom
 # Move history variables
 move_history_scroll = 0
 move_history_surface = None
 move_history_needs_update = True  # Track if we need to redraw
-
 # Sidebar static elements
 sidebar_static_surface = None
 sidebar_needs_update = True  # Track if sidebar static elements need redraw
-
 # Game data tracking
 game_id_counter = 0  # Unique ID for each game
 game_already_saved = False
@@ -101,9 +98,15 @@ def main():
     loadSounds()
     
     # Game state variables
-    squareClicked = ()          # Last square clicked
+    squareClicked = ()          # Last square clicked for click-to-move
     playerClicks = []           # Track player clicks (two squares per move)
+    dragging_piece = None       # Piece being dragged
+    drag_start_square = None    # Square where drag started
+    drag_mouse_pos = (0, 0)     # Current mouse position during drag
+    drag_start_time = 0         # Time when mouse button was pressed
+    is_dragging = False         # Flag to indicate active dragging
     highlight_last_move = True  # Highlight last move
+    DRAG_THRESHOLD = 200        # Milliseconds to differentiate click vs drag
     
     # Get starting position for this game
     starting_position = ''.join(chess_board.generate_chess960_position())
@@ -113,12 +116,6 @@ def main():
         UPSIDEDOWN = True
     
     # Main game loop
-    dragging_piece = None
-    drag_start_square = None
-    drag_offset = (0, 0)
-    drag_mouse_pos = (0, 0)
-    # ---------------------------------------------
-
     while True:
         humanTurn = (gs.white_to_move and humanWhite) or (not gs.white_to_move and humanBlack)
         
@@ -127,60 +124,10 @@ def main():
                 save_game_data(gs, humanWhite, humanBlack, starting_position)
                 exitGame()
             
-            # --- DRAG & DROP HANDLING ---
+            # Mouse button down: Handle sidebar clicks or initiate click/drag
             elif e.type == p.MOUSEBUTTONDOWN:
                 location = p.mouse.get_pos()
-                if location[0] < BOARD_WIDTH and not gs.gameover and humanTurn:
-                    file = location[0] // SQ_SIZE
-                    rank = location[1] // SQ_SIZE
-                    if UPSIDEDOWN:
-                        file, rank = FLIPPEDBOARD[file], FLIPPEDBOARD[rank]
-                    square = gs.board.squares[file, rank]
-                    if square.has_piece():
-                        piece = square.get_piece()
-                        if ((piece.get_color() == 'white' and gs.white_to_move) or
-                            (piece.get_color() == 'black' and not gs.white_to_move)):
-                            dragging_piece = piece
-                            drag_start_square = square
-                            drag_mouse_pos = location
-                            drag_offset = (location[0] - file * SQ_SIZE, location[1] - rank * SQ_SIZE)
-                            selectedSquare = square
-                # --- Existing sidebar/undo/redo/quit code below here ---
-
-                # --- Click-to-move logic (unchanged, keep your existing code here) ---
-
-            elif e.type == p.MOUSEMOTION:
-                if dragging_piece:
-                    drag_mouse_pos = e.pos
-
-            elif e.type == p.MOUSEBUTTONUP:
-                if dragging_piece:
-                    location = e.pos
-                    if location[0] < BOARD_WIDTH:
-                        file = location[0] // SQ_SIZE
-                        rank = location[1] // SQ_SIZE
-                        if UPSIDEDOWN:
-                            file, rank = FLIPPEDBOARD[file], FLIPPEDBOARD[rank]
-                        end_square = gs.board.squares[file, rank]
-                        move = chess_engine.Move(drag_start_square, end_square, gs.move_number)
-                        for validMove in gs.valid_moves:
-                            if move == validMove:
-                                # Handle pawn promotion
-                                pieceMoved = validMove.piece_moved
-                                if pieceMoved.get_name() == 'Pawn' and pieceMoved.can_promote():
-                                    promoteMenu(validMove)
-                                gs.make_new_move(validMove)
-                                animateMove(validMove, gs.valid_moves)
-                                printMove(validMove)
-                                moveMade = True
-                                move_history_needs_update = True
-                                sidebar_needs_update = True
-                                break
-                    dragging_piece = None
-                    drag_start_square = None
-                    drag_offset = (0, 0) # (x,y) location
-                # Check if click is in sidebar for undo/redo buttons or quit button
-                if location[0] >= BOARD_WIDTH:
+                if location[0] >= BOARD_WIDTH:  # Sidebar click handling
                     sidebar_x = location[0] - BOARD_WIDTH
                     sidebar_y = location[1]
                     # Undo button area: 20-100, 80-140
@@ -193,7 +140,7 @@ def main():
                             print(f'Undid {move}', end=' ')
                             moveMade = True
                             move_history_needs_update = True
-                            sidebar_needs_update = True  # Turn indicator needs update
+                            sidebar_needs_update = True
                     # Redo button area: 100-180, 80-140
                     elif (sidebar_x >= 100 and sidebar_x <= 180 and
                           sidebar_y >= 80 and sidebar_y <= 140):
@@ -204,80 +151,146 @@ def main():
                             print(f'Redid {move}', end=' ')
                             moveMade = True
                             move_history_needs_update = True
-                            sidebar_needs_update = True  # Turn indicator needs update
-                    # Quit button area: 20-180, 668-698
-                    # Inside the MOUSEBUTTONDOWN event handler:
-# Quit button area
+                            sidebar_needs_update = True
+                    # Quit button area: 20-180, HEIGHT-60 - HEIGHT-30
                     elif (sidebar_x >= 20 and sidebar_x <= 180 and
-                        sidebar_y >= HEIGHT - 60 and sidebar_y <= HEIGHT - 30):
-                        # Save game data before quitting
+                          sidebar_y >= HEIGHT - 60 and sidebar_y <= HEIGHT - 30):
                         save_game_data(gs, humanWhite, humanBlack, starting_position)
-                        # Reset game state and return to main menu
                         reset_game_state()
                         p.quit()
                         main()
                         return
+                    continue
                 
                 if not gs.gameover and humanTurn:
                     file = location[0] // SQ_SIZE
                     rank = location[1] // SQ_SIZE
                     
-                    # Ensure clicks are within the board area
-                    if location[0] >= BOARD_WIDTH:  # Ignore other sidebar clicks
-                        continue
+                    if UPSIDEDOWN:
+                        file, rank = FLIPPEDBOARD[file], FLIPPEDBOARD[rank]
+                    
+                    square = gs.board.squares[file, rank]
+                    
+                    # Prepare for potential drag or click
+                    if square.has_piece():
+                        piece = square.get_piece()
+                        if ((piece.get_color() == 'white' and gs.white_to_move) or
+                            (piece.get_color() == 'black' and not gs.white_to_move)):
+                            dragging_piece = piece
+                            drag_start_square = square
+                            drag_mouse_pos = location
+                            drag_start_time = p.time.get_ticks()
+                            selectSquare(square)
+            
+            # Mouse motion: Update dragged piece position
+            elif e.type == p.MOUSEMOTION:
+                if dragging_piece and not is_dragging:
+                    # Start dragging only after threshold time
+                    if p.time.get_ticks() - drag_start_time > DRAG_THRESHOLD:
+                        is_dragging = True
+                if is_dragging:
+                    drag_mouse_pos = e.pos
+            
+            # Mouse button up: Process click-to-move or drag-and-drop
+            elif e.type == p.MOUSEBUTTONUP:
+                location = p.mouse.get_pos()
+                if location[0] >= BOARD_WIDTH:
+                    # Reset drag state if mouse released over sidebar
+                    if dragging_piece:
+                        deselectSquare(drag_start_square)
+                        dragging_piece = None
+                        drag_start_square = None
+                        drag_mouse_pos = (0, 0)
+                        is_dragging = False
+                    continue
+                
+                if not gs.gameover and humanTurn:
+                    file = location[0] // SQ_SIZE
+                    rank = location[1] // SQ_SIZE
                     
                     if UPSIDEDOWN:
                         file, rank = FLIPPEDBOARD[file], FLIPPEDBOARD[rank]
                     
-                    # Handle square selection
-                    if squareClicked == (file, rank):
-                        deselectSquare(gs.board.squares[file, rank])
-                        squareClicked = ()
-                        playerClicks = []
-                    else:
-                        squareClicked = (file, rank)
-                        playerClicks.append(squareClicked)
-                        selectSquare(gs.board.squares[file, rank])
-
-                    # Handle move after two clicks
-                    if len(playerClicks) == 2:
-                        startSquare = gs.board.squares[playerClicks[0]]
-                        endSquare = gs.board.squares[playerClicks[1]]
+                    square = gs.board.squares[file, rank]
+                    
+                    # Handle drag-and-drop if dragging
+                    if is_dragging and dragging_piece:
+                        move = chess_engine.Move(drag_start_square, square, gs.move_number)
                         
-                        # Only register move if first square has a piece
-                        if startSquare.has_piece():
-                            move = chess_engine.Move(startSquare, endSquare, gs.move_number)
+                        for validMove in validMoves:
+                            if move == validMove:
+                                pieceMoved = validMove.piece_moved
+                                if pieceMoved.get_name() == 'Pawn' and pieceMoved.can_promote():
+                                    promoteMenu(validMove)
+                                gs.make_new_move(validMove)
+                                animateMove(validMove, validMoves)
+                                printMove(validMove)
+                                moveMade = True
+                                move_history_needs_update = True
+                                sidebar_needs_update = True
+                                break
+                        
+                        # Reset drag state
+                        deselectSquare(drag_start_square)
+                        dragging_piece = None
+                        drag_start_square = None
+                        drag_mouse_pos = (0, 0)
+                        is_dragging = False
+                        if not moveMade:
+                            squareClicked = ()
+                            playerClicks = []
+                    
+                    # Handle click-to-move if not dragging
+                    else:
+                        if squareClicked == (file, rank):
+                            deselectSquare(square)
+                            squareClicked = ()
+                            playerClicks = []
+                        else:
+                            squareClicked = (file, rank)
+                            playerClicks.append(squareClicked)
+                            selectSquare(square)
+                        
+                        # Handle move after two clicks
+                        if len(playerClicks) == 2:
+                            startSquare = gs.board.squares[playerClicks[0]]
+                            endSquare = gs.board.squares[playerClicks[1]]
                             
-                            # Check if move is valid
-                            for validMove in validMoves:
-                                if move == validMove:
-                                    # Handle pawn promotion
-                                    pieceMoved = validMove.piece_moved
-                                    if pieceMoved.get_name() == 'Pawn' and pieceMoved.can_promote():
-                                        promoteMenu(validMove)
-                                    
-                                    # Execute move
-                                    gs.make_new_move(validMove)
-                                    animateMove(validMove, validMoves)
-                                    printMove(validMove)
-                                    moveMade = True
-                                    move_history_needs_update = True
-                                    sidebar_needs_update = True  # Turn indicator needs update
-                                    break
-                            
-                            if not moveMade:
-                                # Invalid move - reset selection
-                                deselectSquare(startSquare)
-                                if endSquare.has_piece():
-                                    selectSquare(endSquare)
-                                    playerClicks = [playerClicks[1]]
-                                else:
-                                    squareClicked = ()
-                                    playerClicks = []
-
+                            if startSquare.has_piece():
+                                move = chess_engine.Move(startSquare, endSquare, gs.move_number)
+                                
+                                for validMove in validMoves:
+                                    if move == validMove:
+                                        pieceMoved = validMove.piece_moved
+                                        if pieceMoved.get_name() == 'Pawn' and pieceMoved.can_promote():
+                                            promoteMenu(validMove)
+                                        gs.make_new_move(validMove)
+                                        animateMove(validMove, validMoves)
+                                        printMove(validMove)
+                                        moveMade = True
+                                        move_history_needs_update = True
+                                        sidebar_needs_update = True
+                                        break
+                                
+                                if not moveMade:
+                                    deselectSquare(startSquare)
+                                    if endSquare.has_piece():
+                                        selectSquare(endSquare)
+                                        playerClicks = [playerClicks[1]]
+                                    else:
+                                        squareClicked = ()
+                                        playerClicks = []
+                        
+                        # Reset drag state after click
+                        if dragging_piece:
+                            deselectSquare(drag_start_square)
+                            dragging_piece = None
+                            drag_start_square = None
+                            drag_mouse_pos = (0, 0)
+                            is_dragging = False
+            
             # Key handler for undo/redo with arrow keys and move history scroll
             elif e.type == p.KEYDOWN:
-                # Undo with left arrow key
                 if e.key == p.K_LEFT:
                     if gs.move_log:
                         gs.board.update_pieces(gs.undo_move())
@@ -286,8 +299,7 @@ def main():
                         print(f'Undid {move}', end=' ')
                         moveMade = True
                         move_history_needs_update = True
-                        sidebar_needs_update = True  # Turn indicator needs update
-                # Redo with right arrow key
+                        sidebar_needs_update = True
                 elif e.key == p.K_RIGHT:
                     if gs.undo_log:
                         gs.redo_move()
@@ -296,8 +308,7 @@ def main():
                         print(f'Redid {move}', end=' ')
                         moveMade = True
                         move_history_needs_update = True
-                        sidebar_needs_update = True  # Turn indicator needs update
-                # Scroll move history with up/down arrows
+                        sidebar_needs_update = True
                 move_pairs = (len(gs.move_log) + 1) // 2
                 if move_pairs > MOVE_HISTORY_MAX_LINES:
                     if e.key == p.K_UP:
@@ -319,7 +330,7 @@ def main():
             printMove(AIMove)
             moveMade = True
             move_history_needs_update = True
-            sidebar_needs_update = True  # Turn indicator needs update
+            sidebar_needs_update = True
         
         # Update game state after move
         if moveMade:
@@ -331,10 +342,14 @@ def main():
             playerClicks = []
             moveMade = False
             selectedSquare = None
+            dragging_piece = None
+            drag_start_square = None
+            drag_mouse_pos = (0, 0)
+            is_dragging = False
 
         # Check game status
         gs.find_mate(validMoves)
-        drawGameState(validMoves, dragging_piece, drag_mouse_pos, drag_offset)
+        drawGameState(validMoves, dragging_piece, drag_mouse_pos)
         
         # Draw the sidebar and instructions
         drawSidebar()
@@ -347,13 +362,12 @@ def main():
             screen.blit(s, (0, 0))
             
             if gs.checkmate:
-                # Determine if the human or computer won
-                if gs.white_to_move:  # White is checkmated, Black wins
+                if gs.white_to_move:
                     if humanBlack:
                         winner_text = "You won by checkmate!"
                     else:
                         winner_text = "Computer Won by checkmate!"
-                else:  # Black is checkmated, White wins
+                else:
                     if humanWhite:
                         winner_text = "You won by checkmate!"
                     else:
@@ -365,21 +379,18 @@ def main():
                 else:
                     drawText('Stalemate - Draw', 36)
             
-            # Play game-end sound only once
             if not gameEndSoundPlayed:
                 SOUNDS['game_end'].play()
                 gameEndSoundPlayed = True
             
-            # Save game data
             save_game_data(gs, humanWhite, humanBlack, starting_position)
 
-        # Reset game-end sound flag if the game is no longer over (e.g., after undo)
         if not gs.gameover and gameEndSoundPlayed:
             gameEndSoundPlayed = False
 
         clock.tick(MAX_FPS)
         p.display.flip()
- 
+
 def drawBoardLabels():
     """Draw rank (1-8) and file (a-h) labels on the board (bottom and left only), using theme colors."""
     font = p.font.SysFont('Arial', 16, bold=True)
@@ -390,29 +401,25 @@ def drawBoardLabels():
         files = files[::-1]
         ranks = ranks[::-1]
 
-    # Use theme colors for labels: light for dark squares, dark for light squares
-    label_color_light = p.Color(theme[0])  # Light square color
-    label_color_dark = p.Color(theme[1])   # Dark square color
+    label_color_light = p.Color(theme[0])
+    label_color_dark = p.Color(theme[1])
 
-    
-    # Draw file labels (a-h) inside the bottom squares, at the bottom-right corner
     for i in range(DIMENSION):
         label_color = label_color_dark if (DIMENSION - 1) % 2 == i % 2 else label_color_light
         label = font.render(files[i], True, label_color)
         label_rect = label.get_rect()
-        x = i * SQ_SIZE + SQ_SIZE - label_rect.width - 2  # 2px padding from right (was 6)
-        y = (DIMENSION - 1) * SQ_SIZE + SQ_SIZE - label_rect.height - 4  # 4px padding from bottom
+        x = i * SQ_SIZE + SQ_SIZE - label_rect.width - 2
+        y = (DIMENSION - 1) * SQ_SIZE + SQ_SIZE - label_rect.height - 4
         screen.blit(label, (x, y))
 
-    # Draw rank labels (1-8) on left side only, vertically centered
     for i in range(DIMENSION):
         label_color = label_color_dark if i % 2 == 0 else label_color_light
         label = font.render(ranks[i], True, label_color)
         label_rect = label.get_rect()
-        x = 6  # 6px padding from left
+        x = 6
         y = i * SQ_SIZE + (SQ_SIZE - label_rect.height) // 2
         screen.blit(label, (x, y))
-        
+
 def save_game_data(gs, humanWhite, humanBlack, starting_position):
     """
     Saves game data to a CSV file with one row per game.
@@ -420,35 +427,28 @@ def save_game_data(gs, humanWhite, humanBlack, starting_position):
     """
     global game_id_counter, game_already_saved
     
-    # Check if this game has already been saved
     if game_already_saved:
         return
         
-    # Determine game outcome and winner
     if gs.checkmate:
         outcome = "Checkmate"
-        if gs.white_to_move:  # White checkmated, Black wins
+        if gs.white_to_move:
             winner = "Human" if humanBlack else "Computer"
-        else:  # Black checkmated, White wins
+        else:
             winner = "Human" if humanWhite else "Computer"
     elif gs.stalemate:
         outcome = "Stalemate"
         winner = "Draw"
     else:
-        # Don't save incomplete games
         return
     
-    # Get move count (total moves in the game)
     move_count = len(gs.move_log)
     
-    # Get average decision time
     decision_times = ai.get_and_reset_decision_times()
     avg_decision_time = sum(decision_times) / len(decision_times) if decision_times else 0.0
     
-    # Get timestamp
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    # Prepare CSV row
     row = {
         "game_id": game_id_counter,
         "outcome": outcome,
@@ -459,7 +459,6 @@ def save_game_data(gs, humanWhite, humanBlack, starting_position):
         "timestamp": timestamp
     }
     
-    # Write to CSV
     csv_file = "game_data.csv"
     file_exists = os.path.isfile(csv_file)
     
@@ -469,18 +468,14 @@ def save_game_data(gs, humanWhite, humanBlack, starting_position):
             writer.writeheader()
         writer.writerow(row)
     
-    # Mark this game as saved
     game_already_saved = True
-    
-    # Increment game ID
     game_id_counter += 1
 
 def loadImages():
     """Initialize dictionary of piece images."""
-    pieces = ['K', 'Q', 'R', 'B', 'N', 'P']  # King, Queen, Rook, Bishop, Knight, Pawn
-    colors = ['w', 'b']                      # White, Black
+    pieces = ['K', 'Q', 'R', 'B', 'N', 'P']
+    colors = ['w', 'b']
 
-    # Use absolute path relative to this file
     images_dir = os.path.join(os.path.dirname(__file__), 'utils', 'images')
 
     for color in colors:
@@ -494,7 +489,6 @@ def loadImages():
                 IMAGES[pieceName].convert()
             except:
                 print(f"Warning: Could not load image for {pieceName}")
-                # Create blank surface if image missing
                 IMAGES[pieceName] = p.Surface((SQ_SIZE, SQ_SIZE))
                 IMAGES[pieceName].fill((200, 200, 200))
 
@@ -502,46 +496,41 @@ def loadSounds():
     """Initialize dictionary of sound effects."""
     sound_files = ['move', 'capture', 'check', 'game_end']
     
-    # Use absolute path relative to this file
     sounds_dir = os.path.join(os.path.dirname(__file__), 'utils', 'sounds')
 
     for sound in sound_files:
         try:
             sound_path = os.path.join(sounds_dir, f"{sound}.wav")
             SOUNDS[sound] = p.mixer.Sound(sound_path)
-            # Set volume (0.0 to 1.0)
             SOUNDS[sound].set_volume(0.5)
         except Exception as e:
             print(f"Warning: Could not load sound for {sound}. Error: {e}")
-            # Create a silent sound as fallback
             SOUNDS[sound] = p.mixer.Sound(p.mixer.Sound(buffer=b'\x00' * 1000))
 
 def playSound(move, undo=False):
     """Play appropriate sound based on the move."""
     if undo:
-        return  # Don't play sounds when undoing moves
+        return
     
-    # Check for capture (including en passant)
     if move.piece_captured is not None or move.contains_enpassant():
         SOUNDS['capture'].play()
     else:
         SOUNDS['move'].play()
 
-def drawGameState(validMoves, dragging_piece=None, drag_mouse_pos=None, drag_offset=(0, 0)):
+def drawGameState(validMoves, dragging_piece=None, drag_mouse_pos=(0, 0)):
     """Draw complete game state including board, pieces, highlights."""
     drawBoard(validMoves)
     if highlight_last_move:
         highlightLastMove()
-    if selectedSquare is not None and not dragging_piece:
+    if selectedSquare is not None:
         highlightSquares(validMoves)
-    drawPieces(dragging_piece, drag_mouse_pos, drag_offset)
+    drawPieces(dragging_piece, drag_mouse_pos)
     drawBoardLabels()
 
 def drawBoard(validMoves):
     """Draw squares on the board."""
     global selectedSquare
 
-    # Do NOT reset selectedSquare here!
     for square in gs.board.squares.T.flat:
         file, rank = getSquareCoordinates(square)
         if square.is_selected():
@@ -587,7 +576,6 @@ def highlightSquares(validMoves):
         )
     )
     
-    # Highlight possible moves
     moveSquares, captureSquares = markMovementSquares(selectedSquare, validMoves)
     
     for square in moveSquares:
@@ -604,20 +592,18 @@ def highlightSquares(validMoves):
         attackSquare.set_alpha(255)
         screen.blit(attackSquare, (file * SQ_SIZE, rank * SQ_SIZE))
 
-def drawPieces(dragging_piece=None, drag_mouse_pos=None, drag_offset=(0, 0)):
+def drawPieces(dragging_piece=None, drag_mouse_pos=(0, 0)):
     """Draw pieces on their current squares and play check sound if needed."""
     global checkSoundPlayed
 
-    # Play check sound only once per check state (before drawing)
     if gs.in_check and not checkSoundPlayed:
         SOUNDS['check'].play()
         checkSoundPlayed = True
     elif not gs.in_check and checkSoundPlayed:
         checkSoundPlayed = False
 
-    king_drawn = False  # Track if we've drawn the king in check
+    king_drawn = False
 
-    # Draw all pieces except the one being dragged
     for piece in gs.board.get_pieces():
         if piece.is_on_board() and piece != dragging_piece:
             file, rank = getSquareCoordinates(piece.get_square())
@@ -628,7 +614,6 @@ def drawPieces(dragging_piece=None, drag_mouse_pos=None, drag_offset=(0, 0)):
                     SQ_SIZE, SQ_SIZE
                 )
             )
-            # Draw red border around the king that is actually in check (only once)
             if (not king_drawn and gs.in_check and
                 piece.get_name() == 'King' and
                 piece.get_color() == gs.check_color):
@@ -642,12 +627,14 @@ def drawPieces(dragging_piece=None, drag_mouse_pos=None, drag_offset=(0, 0)):
                 )
                 p.draw.rect(screen, border_color, border_rect, border_width)
                 king_drawn = True
-
-    # Draw the dragged piece following the mouse
-    if dragging_piece and drag_mouse_pos:
+    
+    # Draw dragged piece last to ensure it's on top
+    if dragging_piece:
         pieceName = dragging_piece.get_image_name()
-        x, y = drag_mouse_pos[0] - drag_offset[0], drag_mouse_pos[1] - drag_offset[1]
-        screen.blit(IMAGES[pieceName], (x, y))
+        # Center piece on mouse cursor
+        x = drag_mouse_pos[0] - SQ_SIZE // 2
+        y = drag_mouse_pos[1] - SQ_SIZE // 2
+        screen.blit(IMAGES[pieceName], p.Rect(x, y, SQ_SIZE, SQ_SIZE))
 
 def markMovementSquares(square, validMoves):
     """Find squares this piece can move to/capture on."""
@@ -686,18 +673,15 @@ def animateMove(move, validMoves, undo=False):
     
     framesPerMove = MAX_FPS // 10 + 1
     
-    # Play sound at the start of the move animation
     playSound(move, undo)
     
     for frame in range(1, framesPerMove + 1):
         drawBoard(validMoves)
         drawPieces()
         
-        # Clear end square
         color = getSquareThemeColor(endSquare)
         p.draw.rect(screen, color, p.Rect(endFile*SQ_SIZE, endRank*SQ_SIZE, SQ_SIZE, SQ_SIZE))
         
-        # Draw captured piece if needed
         if move.contains_enpassant() and not undo:
             epFile, epRank = getSquareCoordinates(move.enpassant_square)
             screen.blit(IMAGES[pieceCaptured.get_image_name()],
@@ -706,7 +690,6 @@ def animateMove(move, validMoves, undo=False):
             screen.blit(IMAGES[pieceCaptured.get_image_name()],
                 p.Rect(endFile*SQ_SIZE, endRank*SQ_SIZE, SQ_SIZE, SQ_SIZE))
         
-        # Handle castling animation
         if move.contains_castle():
             color = getSquareThemeColor(rookEndSquare)
             p.draw.rect(screen, color,
@@ -716,11 +699,9 @@ def animateMove(move, validMoves, undo=False):
                 dRookFile, dRookRank, rookEndFile, rookEndRank, frame,
                 framesPerMove)
         
-        # Draw moving piece
         drawAnimationFrame(pieceMoved, pieceCaptured, startFile, startRank,
             dFile, dRank, endFile, endRank, frame, framesPerMove)
         
-        # Draw sidebar during animation
         drawSidebar()
         
         p.display.flip()
@@ -735,9 +716,9 @@ def drawAnimationFrame(pieceMoved, pieceCaptured, startFile, startRank, dFile, d
 
 def selectSquare(square):
     """Highlight selected square if it's player's piece."""
-    if not square.is_selected() and square.has_piece():  # First check if square has a piece
+    if not square.is_selected() and square.has_piece():
         piece = square.get_piece()
-        if piece:  # Additional safety check
+        if piece:
             color = piece.get_color()
             if ((color == 'white' and gs.white_to_move) or
                 (color == 'black' and not gs.white_to_move)):
@@ -766,14 +747,10 @@ def getSquareCoordinates(square):
 def promoteMenu(move):
     """Show a Pygame-based promotion menu instead of blocking input()."""
     choices = {'q': 'Queen', 'k': 'Knight', 'r': 'Rook', 'b': 'Bishop'}
-    # Draw promotion options on the screen and wait for mouse click
     while True:
         for event in p.event.get():
             if event.type == p.MOUSEBUTTONDOWN:
-                # Check which option was clicked and set promotion
-                # Example: if queen_rect.collidepoint(event.pos): gs.promote('q', move); return
                 pass
-        # Draw the promotion menu here
         p.display.flip()
 
 def printMove(move):
@@ -793,26 +770,21 @@ def drawText(text, font_size, font='Helvetica', xoffset=0, yoffset=0):
 
 def drawTurnIndicator():
     """Draws a turn indicator at the top of the sidebar showing whose turn it is."""
-    # Position and size of the turn indicator
     indicator_x = SIDEBAR_WIDTH // 2
-    indicator_y = 25  # Slightly higher for better alignment
-    radius = 15  # Smaller radius for cleaner look
+    indicator_y = 25
+    radius = 15
 
-    # Draw the circle background
     turn_color = p.Color('white') if gs.white_to_move else p.Color('black')
     p.draw.circle(sidebar_static_surface, turn_color, (indicator_x, indicator_y), radius)
 
-    # Draw a border around the circle
     border_color = p.Color('black') if gs.white_to_move else p.Color('white')
     p.draw.circle(sidebar_static_surface, border_color, (indicator_x, indicator_y), radius, 2)
 
-    # Determine turn text based on player color
     humanTurn = (gs.white_to_move and humanWhite) or (not gs.white_to_move and humanBlack)
     text = "Your turn" if humanTurn else "Computer's turn"
     
-    # Add text label below the circle with adjusted spacing
     font = p.font.SysFont('Helvetica', 16, True)
-    text_color = p.Color('white')  # White text for better contrast on dark background
+    text_color = p.Color('white')
     text_surface = font.render(text, True, text_color)
     text_rect = text_surface.get_rect(center=(indicator_x, indicator_y + radius + 20))
     sidebar_static_surface.blit(text_surface, text_rect)
@@ -824,41 +796,33 @@ def update_move_history_surface():
     if not move_history_needs_update and move_history_surface is not None:
         return
         
-    # Create surface if needed
     if move_history_surface is None:
         move_history_surface = p.Surface((MOVE_HISTORY_WIDTH, MOVE_HISTORY_AREA_HEIGHT), p.SRCALPHA)
     
-    # Clear the surface with transparent background
     move_history_surface.fill((0, 0, 0, 0))
     
-    # Calculate total move pairs and adjust scroll position
     move_pairs = (len(gs.move_log) + 1) // 2
     max_scroll = max(0, move_pairs - MOVE_HISTORY_MAX_LINES)
     move_history_scroll = min(move_history_scroll, max_scroll)
     move_history_scroll = max(0, move_history_scroll)
     
-    # Calculate visible range
     start_line = move_history_scroll
     end_line = min(move_pairs, start_line + MOVE_HISTORY_MAX_LINES)
     
     y_pos = MOVE_HISTORY_MARGIN
     move_counter = start_line + 1
     
-    # Draw move pairs
     for i in range(start_line, end_line):
-        # Move number
         move_num_text = f"{move_counter}."
         move_num_surface = MOVE_HISTORY_BOLD_FONT.render(move_num_text, True, (200, 200, 200))
         move_history_surface.blit(move_num_surface, (0, y_pos))
         
-        # White move
         white_move_index = i * 2
         if white_move_index < len(gs.move_log):
             white_move = gs.move_log[white_move_index][0].name
             white_surface = MOVE_HISTORY_FONT.render(white_move, True, (220, 220, 220))
             move_history_surface.blit(white_surface, (40, y_pos))
         
-        # Black move (if exists)
         black_move_index = i * 2 + 1
         if black_move_index < len(gs.move_log):
             black_move = gs.move_log[black_move_index][0].name
@@ -874,35 +838,28 @@ def drawMoveHistory():
     """Draw the move history in the sidebar with scrollbar and border."""
     global move_history_needs_update, move_history_scroll
     
-    # Update the surface if needed
     update_move_history_surface()
     
-    # Draw border around the move history area
     border_rect = p.Rect(BOARD_WIDTH + MOVE_HISTORY_MARGIN - 2, 160 - 2, 
                         MOVE_HISTORY_WIDTH + 4, MOVE_HISTORY_AREA_HEIGHT + 4)
     p.draw.rect(screen, (150, 150, 150), border_rect, 2)
     
-    # Blit the move history surface to the screen
     screen.blit(move_history_surface, (BOARD_WIDTH + MOVE_HISTORY_MARGIN, 160))
     
-    # Draw scrollbar if needed
     move_pairs = (len(gs.move_log) + 1) // 2
     if move_pairs > MOVE_HISTORY_MAX_LINES:
-        # Calculate scrollbar position and size
         scrollbar_width = 8
         scrollbar_x = BOARD_WIDTH + SIDEBAR_WIDTH - scrollbar_width - 2
         
         scrollbar_height = MOVE_HISTORY_AREA_HEIGHT * (MOVE_HISTORY_MAX_LINES / move_pairs)
-        scrollbar_height = max(20, scrollbar_height)  # Minimum height
+        scrollbar_height = max(20, scrollbar_height)
         
         scroll_range = move_pairs - MOVE_HISTORY_MAX_LINES
         scroll_pos = (move_history_scroll / scroll_range) * (MOVE_HISTORY_AREA_HEIGHT - scrollbar_height) if scroll_range > 0 else 0
         
-        # Draw scrollbar track
         p.draw.rect(screen, (50, 50, 50), 
                    (scrollbar_x, 160, scrollbar_width, MOVE_HISTORY_AREA_HEIGHT))
         
-        # Draw scrollbar thumb
         p.draw.rect(screen, (120, 120, 120), 
                    (scrollbar_x, 160 + scroll_pos, scrollbar_width, scrollbar_height))
 
@@ -913,20 +870,13 @@ def update_sidebar_static():
     if not sidebar_needs_update and sidebar_static_surface is not None:
         return
     
-    # Create surface if needed
     if sidebar_static_surface is None:
         sidebar_static_surface = p.Surface((SIDEBAR_WIDTH, HEIGHT), p.SRCALPHA)
     
-    # Clear the surface with transparent background
     sidebar_static_surface.fill((0, 0, 0, 0))
     
-    # Draw static elements
     drawTurnIndicator()
-    
-    # Draw buttons
     drawSidebarButtons()
-    
-    # Draw quit button
     drawQuitButton()
     
     sidebar_needs_update = False
@@ -935,27 +885,22 @@ def drawSidebar():
     """Draw the sidebar with optimized rendering."""
     global sidebar_static_surface
     
-    # Draw sidebar background (only redraw if needed)
     if move_history_needs_update or move_history_surface is None:
         sidebar_rect = p.Rect(BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT)
         p.draw.rect(screen, (40, 40, 50), sidebar_rect)
         
-        # Draw stylish border
         border_color_inner = (80, 80, 80)
         border_color_outer = (120, 120, 120)
         p.draw.rect(screen, border_color_inner, (BOARD_WIDTH, 0, SIDEBAR_WIDTH, HEIGHT), 2)
         p.draw.rect(screen, border_color_outer, (BOARD_WIDTH - 2, -2, SIDEBAR_WIDTH + 4, HEIGHT + 4), 4)
     
-    # Update and draw static sidebar elements
     update_sidebar_static()
     screen.blit(sidebar_static_surface, (BOARD_WIDTH, 0))
     
-    # Draw move history
     drawMoveHistory()
 
 def drawSidebarButtons():
     """Draw undo and redo buttons on the sidebar static surface."""
-    # Undo button
     undo_button_rect = p.Rect(20, 80, 80, 60)
     p.draw.rect(sidebar_static_surface, (40, 40, 40), undo_button_rect)
     p.draw.rect(sidebar_static_surface, (150, 150, 150), undo_button_rect, 2)
@@ -966,7 +911,6 @@ def drawSidebarButtons():
     ]
     p.draw.polygon(sidebar_static_surface, (200, 200, 200), arrow_points)
 
-    # Redo button
     redo_button_rect = p.Rect(100, 80, 80, 60)
     p.draw.rect(sidebar_static_surface, (40, 40, 40), redo_button_rect)
     p.draw.rect(sidebar_static_surface, (150, 150, 150), redo_button_rect, 2)
@@ -979,8 +923,7 @@ def drawSidebarButtons():
 
 def drawQuitButton():
     """Draw quit button on the sidebar static surface."""
-    # Move button up by increasing the subtraction from HEIGHT
-    quit_button_rect = p.Rect(20, HEIGHT - 60, 160, 30)  # Changed from HEIGHT - 40 to HEIGHT - 60
+    quit_button_rect = p.Rect(20, HEIGHT - 60, 160, 30)
     p.draw.rect(sidebar_static_surface, (150, 40, 40), quit_button_rect)
     
     font = p.font.SysFont('Helvetica', 18, True, False)
@@ -988,32 +931,27 @@ def drawQuitButton():
     quit_object = font.render(quit_text, True, (245, 245, 245))
     quit_rect = quit_object.get_rect()
     quit_rect.centerx = SIDEBAR_WIDTH // 2
-    quit_rect.centery = HEIGHT - 45  # Changed from HEIGHT - 25 to HEIGHT - 45
+    quit_rect.centery = HEIGHT - 45
     sidebar_static_surface.blit(quit_object, quit_rect)
+
 def reset_game_state():
     """Reset all game state variables when starting a new game."""
     global move_history_surface, move_history_needs_update, move_history_scroll
     global sidebar_static_surface, sidebar_needs_update
     global selectedSquare, checkSoundPlayed, gameEndSoundPlayed, UPSIDEDOWN
 
-    # Reset game state variables
     selectedSquare = None
     checkSoundPlayed = False
     gameEndSoundPlayed = False
     UPSIDEDOWN = False
-
-    # Reset move history
     move_history_surface = None
     move_history_needs_update = True
     move_history_scroll = 0
-
-    # Reset sidebar
     sidebar_static_surface = None 
     sidebar_needs_update = True
 
 def exitGame():
     """Clean up and exit."""
-    # Stop all sounds before exiting
     p.mixer.stop()
     p.quit()
     sys.exit()
