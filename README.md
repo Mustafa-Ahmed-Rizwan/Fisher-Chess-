@@ -17,6 +17,19 @@ Drag-and-Drop Movement: Click and hold a piece to drag it to a valid square, wit
 Click-to-Move: Click a piece to select it (highlights the square and possible moves), then click a destination square to move it.
 Visual feedback for selected squares (highlighted), possible moves (green), and captures (red).
 
+<<<<<<< HEAD
+=======
+- **Chess960 Gameplay**: Supports all 960 starting positions with randomized back-rank pieces, adhering to official rules (bishops on opposite-colored squares, king between rooks).
+- **Flexible Castling**: Implements Chess960-specific castling rules, allowing the king to move to various squares (depending on rook positions) with proper path-clearing and safety checks.
+- **AI Opponent**: Powered by Negamax with Alpha-Beta pruning, optimized for Chess960 with bishop pair bonuses (+0.5) and rook development penalties (-0.3).
+- **GUI**: Pygame-based interface with:
+  - Five board themes (blue, black-and-white, green, wood, purple) with distinct colors for light/dark squares, highlights, and last-move indicators.
+  - Sidebar for move history (with scrolling), undo/redo buttons, quit option, and a turn indicator (white/black circle).
+  - Board labels (a-h files, 1-8 ranks) displayed dynamically based on board orientation.
+- **Game Settings**: Tkinter menu to choose player color (White, Black, Random) and board theme, with an "About Chess960" page for rules and context.
+- **Data Analysis**: Saves game data to `game_data.csv` and generates AI performance reports (`chess960_ai_report.txt`) with win rate, decision time, and outcome distribution.
+- **Flexible Rules**: Supports en passant, pawn promotion (via console input), 50-move rule draws, and Chess960-specific castling mechanics.
+>>>>>>> 9350ab4fcbdab547c74267a2f739bd9f3801af30
 
 Animated piece movements and sound effects (move, capture, check, game-end).
 Five board themes (blue, black-and-white, green, wood, purple) with distinct colors for light/dark squares, highlights, and last-move indicators.
@@ -170,3 +183,11 @@ Pandas and NumPy: For enabling efficient data analysis and board management.
 Tkinter: For the game settings menu.
 AI Resources: Concepts from Artificial Intelligence: A Modern Approach by Norvig and Russell informed the Negamax implementation.
 
+<<<<<<< HEAD
+=======
+- **Bobby Fischer**: For inventing Chess960, inspiring this project.
+- **Pygame Community**: For providing a robust library for GUI, drag-and-drop, and sound.
+- **Pandas and NumPy**: For enabling efficient data analysis and board management.
+- **Tkinter**: For the game settings menu.
+- **AI Resources**: Concepts from *Artificial Intelligence: A Modern Approach* by Norvig and Russell informed the Negamax implementation.
+>>>>>>> 9350ab4fcbdab547c74267a2f739bd9f3801af30
